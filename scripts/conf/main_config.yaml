@@ -1,0 +1,77 @@
+
+defaults:
+  - env_config: asos_config
+device: 'cuda:3'
+runs: 751
+batches: 10
+exp_id: '036afc'
+setup_dict: True
+path: 'notebooks/constraints/ASOSFINAL_'
+
+policy_list:
+  treat_uni:
+    _target_: AES.policies.linear.base_policy.LinearUniform
+    name: "Treat Uniform" 
+    type: "treat"
+  linear_TS: 
+    _target_: AES.policies.linear.linear_ts.LinearTS
+    name: "Linear TS"
+    toptwo: False
+    n_samples: 10000
+    type: "treat"
+  linear_toptwo_TS:
+    _target_: AES.policies.linear.linear_ts.LinearTS
+    name: "Linear Top Two TS"
+    toptwo: True  
+    n_samples: 10000
+    type: "treat"
+  treat_rho1:
+    _target_: AES.policies.linear.linear_rho.LinearRho
+    name: "Treat Rho 005"
+    mean: False
+    lr: 0.05
+    type: "treat"
+  treat_rho3:
+    _target_: AES.policies.linear.linear_rho.LinearRho
+    name: "Treat Rho 01"
+    mean: False
+    lr: 0.1
+    type: "treat"
+  treat_rho5:
+    _target_: AES.policies.linear.linear_rho.LinearRho
+    name: "Treat Rho 015"
+    mean: False
+    lr: 0.15
+    type: "treat"
+  treat_rho6:
+    _target_: AES.policies.linear.linear_rho.LinearRho
+    name: "Treat Rho 025"
+    mean: False
+    lr: 0.25
+    type: "treat"
+  treat_rho8:
+    _target_: AES.policies.linear.linear_rho.LinearRho
+    name: "Treat Rho 05"
+    mean: False
+    lr: 0.5
+    type: "treat"
+  treat_rho9:
+    _target_: AES.policies.linear.linear_rho.LinearRho
+    name: "Treat Rho 1"
+    mean: False
+    lr: 1
+    type: "treat"
+
+MDP:
+  treatment_MDP: 
+    _target_: AES.mdp.treatment_mdp.TreatmentMDP
+    beta_0: None 
+    sigma_0: None 
+    n_arms: 10 
+    s2: 0.1
+    use_precision: False
+    n_objs: 2
+
+objective:
+  _target_: 'AES.objectives.regret.constraint_best_arm'
+  constraint_vals: 0

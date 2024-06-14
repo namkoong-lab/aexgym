@@ -1,0 +1,13 @@
+name: aexgym
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python
+  - matplotlib
+  - numpy
+  - pytorch
+  - pandas 
+  - scikit-learn
+  - statsmodels
+

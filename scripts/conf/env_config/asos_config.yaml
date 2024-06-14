@@ -1,0 +1,12 @@
+_target_: 'notebooks.make_asos_env.ASOS'
+context_len: 10
+batch: 10000
+n_steps: 10
+n_arms: 10
+seed: 1
+metric_id_list: [3, 2]
+demean: False
+subtract: True
+n_objs: 2
+exp_id: "036afc"
+noise: 'Gaussian'
