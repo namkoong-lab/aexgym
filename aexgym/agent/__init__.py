@@ -11,7 +11,13 @@ from aexgym.agent.linear.linear_ts import (
 
 from aexgym.agent.linear.linear_ucb import (
     LinearUCB, 
-    LinearEI,
+)
+
+from aexgym.agent.linear.linear_ei import (
+    LinearEI
+)
+
+from aexgym.agent.linear.linear_oed import (
     LinearOED
 )
 
