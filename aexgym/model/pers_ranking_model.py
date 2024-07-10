@@ -42,10 +42,12 @@ class PersonalizedRankingModel(BaseLinearModel):
         return contexts[batch_indices, max_indices]
     
     def features_all_arms(self, contexts: Tensor, action_contexts: Tensor):
-        user_contexts, item_contexts = contexts 
+        user_contexts, item_contexts = contexts
+        num_items, ranker_contexts = action_contexts
         batch_size = user_contexts.shape[0]
+        contexts = (user_contexts.to(ranker_contexts.device), item_contexts.to(ranker_contexts.device))
         features = []
         for i in range(self.n_arms):
-            actions = torch.tensor([i] * batch_size)
+            actions = torch.tensor([i] * batch_size).to(ranker_contexts.device)
             features.append(self.feature_map(actions, contexts, action_contexts).unsqueeze(1))
         return torch.cat(features, dim=1)

@@ -57,9 +57,8 @@ class RankingRho(RankingAgent):
         n_objs = beta.shape[-1]
         context_len = eval_contexts[0].shape[0]
         train_context_list = [train_context_sampler(i=i, repeat=repeats) for i in range(cur_step, n_steps)]
-        user_context_list = [context[0] for context in train_context_list]
+        user_context_list = [context[0].to(eval_contexts[0].device) for context in train_context_list]
         user_contexts = torch.cat(user_context_list, dim=0)
-        
         eval_features_all_arms = self.model.features_all_arms(eval_contexts, eval_action_contexts)
         eval_features_all_arms = eval_features_all_arms.reshape(eval_features_all_arms.shape[0]* eval_features_all_arms.shape[2], eval_features_all_arms.shape[1], eval_features_all_arms.shape[3])
 
