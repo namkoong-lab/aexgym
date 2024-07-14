@@ -61,6 +61,8 @@ class RankingRho(RankingAgent):
         user_contexts = torch.cat(user_context_list, dim=0)
         eval_features_all_arms = self.model.features_all_arms(eval_contexts, eval_action_contexts)
         eval_features_all_arms = eval_features_all_arms.reshape(eval_features_all_arms.shape[0]* eval_features_all_arms.shape[2], eval_features_all_arms.shape[1], eval_features_all_arms.shape[3])
+        train_features_all_arms = torch.cat([self.model.features_all_arms(train_contexts, eval_action_contexts) for train_contexts in train_context_list], dim=0)
+
 
         train_batch = int(user_contexts.shape[0] / (n_steps - cur_step))
         boost = real_batch / train_batch 
@@ -76,8 +78,8 @@ class RankingRho(RankingAgent):
             #calculate probabilities 
             probs = policy(user_contexts)
             #get fake covariance matrix
-            cov = torch.stack([get_ranking_cov(self.model, sigma[:, :, i], probs, train_context_list, eval_action_contexts, cur_step, boost = boost, obj=i, treat=self.treat) for i in range(n_objs)], dim=2)      
-            loss = - torch.mean(LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, objective, msqrt=self.msqrt)) 
+            cov = torch.stack([get_ranking_cov(self.model, sigma[:, :, i], probs, train_context_list, eval_action_contexts, cur_step, boost = boost, obj=i, treat=self.treat) for i in range(n_objs)], dim=2)     
+            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, train_features_all_arms, objective, probs, msqrt=self.msqrt)
             if print_losses == True:
                 print(epoch, 'loss', -loss.item())
                 print('policy', torch.mean(probs, dim=0))
@@ -97,7 +99,6 @@ def get_ranking_cov(MDP, sigma, probs, features_list, action_contexts, cur_step,
     for i, features in enumerate(features_list):
         features_all_arms = MDP.features_all_arms(features, action_contexts)
         features_all_arms_list.append(features_all_arms / (MDP.s2[cur_step + i][obj]) ** 0.5)
-    
     features_all_arms = torch.cat(features_all_arms_list, dim=0).to(probs.device)
     weighted_contexts = torch.einsum('nk,nksd->nksd', probs, features_all_arms)
     weighted_contexts = weighted_contexts.reshape(weighted_contexts.shape[0] * weighted_contexts.shape[2], weighted_contexts.shape[1], weighted_contexts.shape[3])
@@ -105,7 +106,6 @@ def get_ranking_cov(MDP, sigma, probs, features_list, action_contexts, cur_step,
     #n = batch, k = n_arms, f,c = feature_dim
     #f and c are both feature dimension, but einsum doesn't allow same letters
     cov = torch.einsum('nkf,nck->fc', weighted_contexts, torch.transpose(features_all_arms, 2,1)) 
-
     # calculate smoothed covariance
     if MDP.use_precision == False:
         smoothed_inv = torch.linalg.inv(boost*cov + torch.linalg.inv(sigma))

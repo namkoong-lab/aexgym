@@ -37,7 +37,14 @@ class PolicyNet(nn.Module):
         return x
     
 
-def LinearQFn(beta, cov, num_zs, features_all_arms, objective, msqrt=False):
+def LinearQFn(beta, 
+              cov, 
+              num_zs, 
+              features_all_arms, 
+              train_features_all_arms,
+              objective, 
+              probs, 
+              msqrt=False):
     batch = features_all_arms.shape[0]
     k = features_all_arms.shape[1]
     device = features_all_arms.device
@@ -45,6 +52,8 @@ def LinearQFn(beta, cov, num_zs, features_all_arms, objective, msqrt=False):
     #calculate mean, n=batch, k=n_arms, f=feature_dim
     mean = torch.einsum('nkf,fd->nkd', features_all_arms, beta)
     mean = mean - torch.mean(mean, dim=1, keepdim=True)
+    train_mean = torch.einsum('nkrf,fd->nkrd', train_features_all_arms, beta)
+    train_mean = train_mean - torch.mean(train_mean, dim=1, keepdim=True)
 
     #generate zs
     z = torch.normal(0,1,size=(batch, k, num_zs, n_objs), device = device) 
@@ -64,7 +73,12 @@ def LinearQFn(beta, cov, num_zs, features_all_arms, objective, msqrt=False):
     value =  mu + sigma_z
     maxes = objective(value)
     maxes = torch.max(value, dim=1).values
-    return maxes
+    if objective.weights is None:
+        return - torch.mean(maxes)
+    elif objective.weights is not None:
+        w1, w2 = objective.weights 
+        cumul_term = torch.einsum('nk, nkrd->nrd', probs, train_mean)
+        return - (w1 *  torch.mean(cumul_term) + w2 * torch.mean(maxes))
 
 
 def get_cov(MDP, sigma, probs, features_list, cur_step, boost=1, obj=0, treat=False):

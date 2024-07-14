@@ -14,24 +14,28 @@ class RankingContextSampler:
                  batch_size,
                  n_arms,
                  n_items = 5,
-                 total_items = 10):
+                 total_items = 10,
+                 device = 'cpu'):
         
-        self.context_len = context_len 
+        self.device = device
+
+        self.context_len = context_len
         self.batch_size = batch_size
         #context prior
-        self.user_context_mu = user_context_mu
-        self.user_context_var = user_context_var
+        self.user_context_mu = user_context_mu.to(device)
+        self.user_context_var = user_context_var.to(device)
 
-        self.item_context_mu = item_context_mu
-        self.item_context_var = item_context_var
+        self.item_context_mu = item_context_mu.to(device)
+        self.item_context_var = item_context_var.to(device)
 
         self.total_items = total_items
         self.n_items = n_items 
         self.n_arms = n_arms
+        
         self.action_contexts = self.reset_action_contexts()
 
     def reset_action_contexts(self):
-        action_context_mvn = torch.distributions.MultivariateNormal(torch.zeros(self.context_len), torch.eye(self.context_len))
+        action_context_mvn = torch.distributions.MultivariateNormal(torch.ones(self.context_len).to(self.device), torch.eye(self.context_len).to(self.device))
         action_contexts = (self.n_items, action_context_mvn.sample((self.n_arms,)))
         return action_contexts
 
@@ -81,7 +85,8 @@ class RankingSyntheticEnv(RankingContextSampler, BaseContextualEnv):
                  batch_size,
                  n_arms,
                  n_items = 5,
-                 total_items = 10
+                 total_items = 10,
+                 device = 'cpu'
                  ):
         RankingContextSampler.__init__(self, 
                                        user_context_mu, 
@@ -92,7 +97,8 @@ class RankingSyntheticEnv(RankingContextSampler, BaseContextualEnv):
                                        batch_size,
                                        n_arms,
                                        n_items,
-                                       total_items)
+                                       total_items,
+                                       device = device)
         BaseContextualEnv.__init__(self, n_steps)
         self.true_env = true_env
 

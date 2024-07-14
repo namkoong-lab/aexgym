@@ -37,7 +37,7 @@ class LinearRho(LinearAgent):
         
         batch = contexts.shape[0]
         probs = self.policy(contexts)
-        return torch.mean(probs, dim=0).unsqueeze(0).repeat(batch, 1)
+        return probs[:batch]
     
     
     def train_agent(self, 
@@ -79,7 +79,7 @@ class LinearRho(LinearAgent):
             probs = policy(train_contexts)
             #get fake covariance matrix
             cov = torch.stack([get_cov(self.model, sigma[:, :, i], probs, train_context_list, cur_step, boost = boost, obj=i, treat=self.treat) for i in range(n_objs)], dim=2)      
-            loss = - torch.mean(LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, objective, msqrt=self.msqrt)) 
+            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, objective, probs, msqrt=self.msqrt) 
             if print_losses == True:
                 print(epoch, 'loss', -loss.item())
                 print('policy', torch.mean(probs, dim=0))
