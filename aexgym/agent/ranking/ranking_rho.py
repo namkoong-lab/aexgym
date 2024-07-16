@@ -15,7 +15,8 @@ class RankingRho(RankingAgent):
                  scale = 1, 
                  num_zs=1000, 
                  treat=False, 
-                 msqrt=False, 
+                 msqrt=False,
+                 weights = (0, 1), 
                  **kwargs):
         super().__init__(model, name)
         self.epochs = epochs
@@ -26,6 +27,7 @@ class RankingRho(RankingAgent):
         self.policy = None
         self.treat=treat
         self.msqrt = msqrt
+        self.weights = weights
     
     def forward(self, 
                 beta, 
@@ -63,8 +65,8 @@ class RankingRho(RankingAgent):
         eval_features_all_arms = eval_features_all_arms.reshape(eval_features_all_arms.shape[0]* eval_features_all_arms.shape[2], eval_features_all_arms.shape[1], eval_features_all_arms.shape[3])
         train_features_all_arms = torch.cat([self.model.features_all_arms(train_contexts, eval_action_contexts) for train_contexts in train_context_list], dim=0)
 
-
-        train_batch = int(user_contexts.shape[0] / (n_steps - cur_step))
+        horizon = n_steps - cur_step
+        train_batch = int(user_contexts.shape[0] / horizon)
         boost = real_batch / train_batch 
         
         #initialize policy and optimizer
@@ -79,7 +81,7 @@ class RankingRho(RankingAgent):
             probs = policy(user_contexts)
             #get fake covariance matrix
             cov = torch.stack([get_ranking_cov(self.model, sigma[:, :, i], probs, train_context_list, eval_action_contexts, cur_step, boost = boost, obj=i, treat=self.treat) for i in range(n_objs)], dim=2)     
-            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, train_features_all_arms, objective, probs, msqrt=self.msqrt)
+            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, train_features_all_arms, objective, probs, self.weights, msqrt=self.msqrt, ranking=True, horizon=horizon)
             if print_losses == True:
                 print(epoch, 'loss', -loss.item())
                 print('policy', torch.mean(probs, dim=0))

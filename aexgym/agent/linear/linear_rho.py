@@ -16,6 +16,7 @@ class LinearRho(LinearAgent):
                  num_zs=1000, 
                  treat=False, 
                  msqrt=False, 
+                 weights = (0, 1), 
                  **kwargs):
         super().__init__(model, name)
         self.epochs = epochs
@@ -26,6 +27,7 @@ class LinearRho(LinearAgent):
         self.policy = None
         self.treat=treat
         self.msqrt = msqrt
+        self.weights = weights
     
     def forward(self, 
                 beta, 
@@ -55,16 +57,17 @@ class LinearRho(LinearAgent):
         
         n_objs = beta.shape[-1]
         context_len = eval_contexts.shape[1]
-        train_context_list = [train_context_sampler(i=i, repeat=repeats) for i in range(cur_step, n_steps)]
+        train_context_list = [train_context_sampler(i=i, repeat=repeats).to(beta.device) for i in range(cur_step, n_steps)]
         train_contexts = torch.cat(train_context_list, dim=0)
+        train_features_all_arms = torch.cat([self.model.features_all_arms(train_contexts, eval_action_contexts) for train_contexts in train_context_list], dim=0)
         eval_features_all_arms = self.model.features_all_arms(eval_contexts, eval_action_contexts)
         
         if self.treat:
             eval_features_all_arms = eval_features_all_arms[:,:,context_len:]
             beta = beta[context_len:]
             sigma = sigma[context_len:, context_len:]
-
-        train_batch = int(train_contexts.shape[0] / (n_steps - cur_step))
+        horizon = n_steps - cur_step
+        train_batch = int(train_contexts.shape[0] / horizon)
         boost = real_batch / train_batch 
         
         #initialize policy and optimizer
@@ -79,7 +82,7 @@ class LinearRho(LinearAgent):
             probs = policy(train_contexts)
             #get fake covariance matrix
             cov = torch.stack([get_cov(self.model, sigma[:, :, i], probs, train_context_list, cur_step, boost = boost, obj=i, treat=self.treat) for i in range(n_objs)], dim=2)      
-            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, objective, probs, msqrt=self.msqrt) 
+            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, train_features_all_arms, objective, probs, self.weights, msqrt=self.msqrt, ranking=False, horizon=horizon) 
             if print_losses == True:
                 print(epoch, 'loss', -loss.item())
                 print('policy', torch.mean(probs, dim=0))

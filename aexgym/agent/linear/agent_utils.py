@@ -44,7 +44,10 @@ def LinearQFn(beta,
               train_features_all_arms,
               objective, 
               probs, 
-              msqrt=False):
+              weights,
+              msqrt=False,
+              ranking = False,
+              horizon=1):
     batch = features_all_arms.shape[0]
     k = features_all_arms.shape[1]
     device = features_all_arms.device
@@ -52,7 +55,10 @@ def LinearQFn(beta,
     #calculate mean, n=batch, k=n_arms, f=feature_dim
     mean = torch.einsum('nkf,fd->nkd', features_all_arms, beta)
     mean = mean - torch.mean(mean, dim=1, keepdim=True)
-    train_mean = torch.einsum('nkrf,fd->nkrd', train_features_all_arms, beta)
+    if ranking:
+        train_mean = torch.einsum('nkrf,fd->nkrd', train_features_all_arms, beta)
+    else:
+        train_mean = torch.einsum('nkf,fd->nkd', train_features_all_arms, beta)
     train_mean = train_mean - torch.mean(train_mean, dim=1, keepdim=True)
 
     #generate zs
@@ -73,12 +79,11 @@ def LinearQFn(beta,
     value =  mu + sigma_z
     maxes = objective(value)
     maxes = torch.max(value, dim=1).values
-    if objective.weights is None:
-        return - torch.mean(maxes)
-    elif objective.weights is not None:
-        w1, w2 = objective.weights 
+    if ranking:
         cumul_term = torch.einsum('nk, nkrd->nrd', probs, train_mean)
-        return - (w1 *  torch.mean(cumul_term) + w2 * torch.mean(maxes))
+    else:
+        cumul_term = torch.einsum('nk, nkd->nd', probs, train_mean)
+    return - (weights[0] * horizon *  torch.mean(cumul_term) + weights[1] * torch.mean(maxes))
 
 
 def get_cov(MDP, sigma, probs, features_list, cur_step, boost=1, obj=0, treat=False):
