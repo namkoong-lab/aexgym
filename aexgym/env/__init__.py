@@ -13,3 +13,8 @@ from aexgym.env.pers_env import (
     PersSyntheticEnv
 )
 
+from aexgym.env.ranking_env import (
+    RankingContextSampler,
+    RankingSyntheticEnv
+)
+

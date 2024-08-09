@@ -4,8 +4,9 @@ from torch.nn import functional as F
 from torch import Tensor
 from typing import Optional
 from aexgym.model.base_model import BaseModel 
+from aexgym.agent.linear.base_agent import LinearAgent
 
-class LinearAgent(nn.Module): 
+class RankingAgent(LinearAgent): 
     """
     Superclass for contextual linear bandit agent. Relies on an fake model 
     environment to provide a feature representation and to rollout 
@@ -15,40 +16,19 @@ class LinearAgent(nn.Module):
                  model: BaseModel,
                  name: str,
                  **kwargs):
-        super().__init__()
-        self.model = model
-        self.name = name
-        self.use_precision = model.use_precision 
-
-    def train_agent(*args, **kwargs):
-        pass
-    
-    def forward(self, 
-                beta: Tensor, 
-                sigma: Tensor, 
-                contexts: Optional[Tensor] = None):
-        
-        """ Outputs a probability distribution over arm choices given a context.
-        Args:
-
-            contexts (tensor): (batch_size x context_len) tensor of contexts
-        """
-        pass 
+        super().__init__(model, name) 
+        self.use_precision = model.use_precision
 
     def fantasize(self, 
                 beta: Tensor, 
                 contexts: Tensor, 
                 action_contexts: Tensor):
         """pick separate best arm for each context"""
-        phis = self.model.features_all_arms(contexts, action_contexts)
+        phis = torch.sum(self.model.features_all_arms(contexts, action_contexts), dim=2)
         rewards = torch.einsum('nkc,cd->nkd', phis, beta)
         return rewards
 
-
-
-    
-
-class LinearUniform(LinearAgent):
+class RankingUniform(RankingAgent):
     def __init__(self, model, name, **kwargs):
         super().__init__(model, name)
 
@@ -59,8 +39,6 @@ class LinearUniform(LinearAgent):
                 action_contexts = None, 
                 objective=None, 
                 costs=None):
-        batch_size = contexts.shape[0]
+        user_contexts, item_contexts = contexts 
+        batch_size = user_contexts.shape[0]
         return torch.ones((batch_size, self.model.n_arms), device=beta.device) / self.model.n_arms
-
-
-

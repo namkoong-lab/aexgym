@@ -14,6 +14,10 @@ from aexgym.model.treatment_linear_model import (
     TreatmentPersonalModel
 )
 
+from aexgym.model.pers_ranking_model import (
+    PersonalizedRankingModel
+)
+
 from aexgym.model.model_utils import (
     update_linear_posterior,
     update_reg_posterior

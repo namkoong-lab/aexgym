@@ -11,15 +11,14 @@ class contextual_simple_regret(nn.Module):
     def __init__(self):
         super(contextual_simple_regret, self).__init__()
 
-    def forward(self, fantasy_rewards, true_rewards = None):
-        if true_rewards is None:
-            return fantasy_rewards[:, :, :, 0]
-        else:
-            policy_arms = torch.argmax(fantasy_rewards[:, :, 0], dim=1)
-            policy_rewards = true_rewards[:, :, 0][torch.arange(0, true_rewards.shape[0]), policy_arms]
+    def forward(self, agent_actions = None, true_rewards = None, monte_carlo_rewards = None, ):
+        if monte_carlo_rewards is not None:
+            return monte_carlo_rewards[:, :, :, 0]
+        elif true_rewards is not None:
+            policy_rewards = true_rewards[:, :, 0][torch.arange(0, true_rewards.shape[0]), agent_actions]
             optimal_rewards, optimal_actions = torch.max(true_rewards[:, :, 0], axis = 1)
             regret = torch.mean(optimal_rewards - policy_rewards).item()
-            percent_arms_correct = torch.sum(torch.eq(policy_arms, optimal_actions)).item() / true_rewards.shape[0]
+            percent_arms_correct = torch.sum(torch.eq(agent_actions, optimal_actions)).item() / true_rewards.shape[0]
             return make_dict(regret, percent_arms_correct)
 
 class contextual_best_arm(nn.Module):
