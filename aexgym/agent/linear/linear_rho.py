@@ -57,6 +57,7 @@ class LinearRho(LinearAgent):
         print_losses=False, 
         objective=None,
         costs = None,
+        budget = 100000,
         repeats=10000
     ):
         
@@ -72,12 +73,12 @@ class LinearRho(LinearAgent):
         
         #initialize policy and optimizer
         policy = self.policy_net(train_contexts, self.model.n_arms).to(beta.device)
-        optimizer = torch.optim.Adam(policy.parameters(), lr = self.lr)
+        optimizer1 = torch.optim.Adam(policy.parameters(), lr = self.lr)
+        optimizer2 = torch.optim.Adam(policy.parameters(), lr = self.lr)
 
         for epoch in range(self.epochs):
-
             #initialize optimizer
-            optimizer.zero_grad()  
+            optimizer1.zero_grad()  
             #calculate probabilities 
             probs = policy(train_contexts)
 
@@ -91,14 +92,25 @@ class LinearRho(LinearAgent):
             train_mean = torch.einsum('nkf,fd->nkd', train_features_all_arms, beta) 
             train_mean = train_mean - torch.mean(train_mean, dim=1, keepdim=True)
             cumul_reg_loss = horizon *  torch.mean(torch.einsum('nk, nkd->nd', probs, train_mean))
-            cost_loss = torch.mean(torch.einsum('nk, k->n', probs, costs))
-            loss = self.cost_weight * cost_loss -(self.weights[0] * cumul_reg_loss + self.weights[1] * simple_reg_loss)
+            loss = -(self.weights[0] * cumul_reg_loss + self.weights[1] * simple_reg_loss)
             if print_losses == True:
                 print(epoch, 'loss', -loss.item())
                 print('policy', torch.mean(probs, dim=0))
                 
             loss.backward()
-            optimizer.step()
+            optimizer1.step()
+            loss = torch.mean(torch.einsum('nk, k->n', probs, costs)) - torch.min(costs)
+            counter = 0
+            while loss > budget:
+                counter+=1
+                optimizer2.zero_grad()
+                probs = policy(train_contexts)
+                loss = torch.mean(torch.einsum('nk, k->n', probs, costs)) - torch.min(costs)
+                loss.backward()
+                optimizer2.step()
+                if counter > 100:
+                    break
+                
         # update policy 
         self.policy = policy
 
