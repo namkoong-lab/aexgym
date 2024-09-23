@@ -34,6 +34,9 @@ class LinearTS(LinearAgent):
         fake_rewards = objective(monte_carlo_rewards = fake_mc)
         if self.constraint:
             fake_rewards = torch.einsum('nks, k->nks', fake_rewards, 1 / costs)
+
+        #print(costs)
+        print(fake_rewards[0, :, 0])
         return fake_rewards
     
     def forward(self, beta, sigma, contexts=None,  action_contexts = None, objective = None, costs=None):

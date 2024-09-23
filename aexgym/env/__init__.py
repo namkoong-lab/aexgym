@@ -10,7 +10,9 @@ from aexgym.env.dow_env import (
 
 from aexgym.env.pers_env import (
     PersContextSampler,
-    PersSyntheticEnv
+    PersSyntheticEnv,
+    ConstraintPersSampler,
+    ConstraintPersSyntheticEnv
 )
 
 from aexgym.env.ranking_env import (

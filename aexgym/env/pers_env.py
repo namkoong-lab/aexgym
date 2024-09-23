@@ -29,11 +29,31 @@ class PersContextSampler:
     
     def sample_action_contexts(self):
         return torch.tensor([0])
+    
+    def sample_costs(self):
+        return torch.tensor([0])
+    
+class ConstraintPersSampler(PersContextSampler):
+    def __init__(self, context_mu, context_var, context_len, batch_size, constraint_mu, constraint_var):
+        PersContextSampler.__init__(self, context_mu, context_var, context_len, batch_size)
+        self.constraint_mu = constraint_mu
+        self.constraint_var = constraint_var
+
+    def sample_costs(self):
+        mvn = torch.distributions.MultivariateNormal(self.constraint_mu, self.constraint_var)
+        costs = torch.abs(mvn.sample())
+        return costs
+        
 
 
 class PersSyntheticEnv(PersContextSampler, BaseSyntheticEnv):
     def __init__(self, model, context_mu, context_var, context_len, batch_size, n_steps):
         PersContextSampler.__init__(self, context_mu, context_var, context_len, batch_size)
+        BaseSyntheticEnv.__init__(self, model, n_steps)
+
+class ConstraintPersSyntheticEnv(ConstraintPersSampler, BaseSyntheticEnv):
+    def __init__(self, model, context_mu, context_var, context_len, batch_size, n_steps, constraint_mu, constraint_var):
+        ConstraintPersSampler.__init__(self, context_mu, context_var, context_len, batch_size, constraint_mu, constraint_var)
         BaseSyntheticEnv.__init__(self, model, n_steps)
 
         

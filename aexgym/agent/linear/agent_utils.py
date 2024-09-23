@@ -37,17 +37,13 @@ class PolicyNet(nn.Module):
         return x
     
 
-def LinearQFn(beta, 
-              cov, 
-              num_zs, 
-              features_all_arms, 
-              train_features_all_arms,
-              objective, 
-              probs, 
-              weights,
-              msqrt=False,
-              ranking = False,
-              horizon=1):
+def LinearQFn(
+    beta, 
+    cov, 
+    num_zs, 
+    features_all_arms, 
+    objective, 
+):
     batch = features_all_arms.shape[0]
     k = features_all_arms.shape[1]
     device = features_all_arms.device
@@ -55,35 +51,21 @@ def LinearQFn(beta,
     #calculate mean, n=batch, k=n_arms, f=feature_dim
     mean = torch.einsum('nkf,fd->nkd', features_all_arms, beta)
     mean = mean - torch.mean(mean, dim=1, keepdim=True)
-    if ranking:
-        train_mean = torch.einsum('nkrf,fd->nkrd', train_features_all_arms, beta)
-    else:
-        train_mean = torch.einsum('nkf,fd->nkd', train_features_all_arms, beta)
-    train_mean = train_mean - torch.mean(train_mean, dim=1, keepdim=True)
 
     #generate zs
     z = torch.normal(0,1,size=(batch, k, num_zs, n_objs), device = device) 
     var = torch.einsum('nkc,cfd->nkfd', features_all_arms, cov)
+    
     #calculate variance
-    if msqrt:
-        FastMatSqrt = MPA_Lya.apply
-        var = torch.einsum('nkfd,naf->nkad', var, features_all_arms)
-        var = torch.stack([FastMatSqrt(var[:, :, :, i]) for i in range(n_objs)], dim=3)
-        sigma_z = torch.einsum('nkkd,nkzd->nkzd', var, z)
-    elif not msqrt:
-        var = torch.sqrt(torch.einsum('nkfd,nkf->nkd', var, features_all_arms))
-        sigma_z = torch.einsum('nkd,nkzd->nkzd', var, z)
+    var = torch.sqrt(torch.einsum('nkfd,nkf->nkd', var, features_all_arms))
+    sigma_z = torch.einsum('nkd,nkzd->nkzd', var, z)
 
     #calculate mu + sigma*z
     mu = torch.einsum('nkd,nkzd->nkzd', mean, torch.ones(batch, k, num_zs, n_objs, device=device))
     value =  mu + sigma_z
     maxes = objective(value)
     maxes = torch.max(value, dim=1).values
-    if ranking:
-        cumul_term = torch.einsum('nk, nkrd->nrd', probs, train_mean)
-    else:
-        cumul_term = torch.einsum('nk, nkd->nd', probs, train_mean)
-    return - (weights[0] * horizon *  torch.mean(cumul_term) + weights[1] * torch.mean(maxes))
+    return torch.mean(maxes)
 
 
 def get_cov(MDP, sigma, probs, features_list, cur_step, boost=1, obj=0, treat=False):
@@ -91,11 +73,7 @@ def get_cov(MDP, sigma, probs, features_list, cur_step, boost=1, obj=0, treat=Fa
     features_all_arms_list = []
     
     for i, features in enumerate(features_list):
-        batch = features.shape[0]
-        context_len = features.shape[1]
         features_all_arms = MDP.features_all_arms(features, 0)
-        if treat:
-            features_all_arms = features_all_arms[:,:,context_len:]
         features_all_arms_list.append(features_all_arms / (MDP.s2[cur_step + i][obj]) ** 0.5)
     
     features_all_arms = torch.cat(features_all_arms_list, dim=0).to(probs.device)

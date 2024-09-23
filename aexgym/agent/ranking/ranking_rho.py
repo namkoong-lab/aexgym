@@ -14,8 +14,6 @@ class RankingRho(RankingAgent):
                  lr=0.4, 
                  scale = 1, 
                  num_zs=1000, 
-                 treat=False, 
-                 msqrt=False,
                  weights = (0, 1), 
                  **kwargs):
         super().__init__(model, name)
@@ -25,8 +23,6 @@ class RankingRho(RankingAgent):
         self.num_zs = num_zs
         self.policy_net = TabularPolicy
         self.policy = None
-        self.treat=treat
-        self.msqrt = msqrt
         self.weights = weights
     
     def forward(self, 
@@ -80,8 +76,18 @@ class RankingRho(RankingAgent):
             #calculate probabilities 
             probs = policy(user_contexts)
             #get fake covariance matrix
-            cov = torch.stack([get_ranking_cov(self.model, sigma[:, :, i], probs, train_context_list, eval_action_contexts, cur_step, boost = boost, obj=i, treat=self.treat) for i in range(n_objs)], dim=2)     
-            loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, train_features_all_arms, objective, probs, self.weights, msqrt=self.msqrt, ranking=True, horizon=horizon)
+            cov = torch.stack([get_ranking_cov(self.model, sigma[:, :, i], probs, train_context_list, eval_action_contexts, cur_step, boost = boost, obj=i) for i in range(n_objs)], dim=2)     
+            
+            #calculate simple regret loss
+            simple_reg_loss = LinearQFn(beta, cov, self.num_zs, eval_features_all_arms, objective, probs)
+            
+            # calculate cumulative regret loss 
+            train_mean = torch.einsum('nkrf,fd->nkrd', train_features_all_arms, beta)
+            train_mean = train_mean - torch.mean(train_mean, dim=1, keepdim=True)
+            cumul_reg_loss = torch.einsum('nk, nkrd->nrd', probs, train_mean)
+            
+            #loss term 
+            loss = -(self.weights[0] * cumul_reg_loss + self.weights[1] * simple_reg_loss)
             if print_losses == True:
                 print(epoch, 'loss', -loss.item())
                 print('policy', torch.mean(probs, dim=0))
@@ -94,7 +100,7 @@ class RankingRho(RankingAgent):
 
 
 
-def get_ranking_cov(MDP, sigma, probs, features_list, action_contexts, cur_step, boost=1, obj=0, treat=False):
+def get_ranking_cov(MDP, sigma, probs, features_list, action_contexts, cur_step, boost=1, obj=0):
     #calculate policy limit covariance
     features_all_arms_list = []
     

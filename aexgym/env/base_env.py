@@ -73,6 +73,15 @@ class BaseContextualEnv:
             contexts (tensor): 2D (n_arms x action_context_len) tensor of contexts
         """
         pass
+
+    @abc.abstractmethod
+    def sample_costs(self):
+        """ Returns costs associated with each arm or context/arm pair
+
+        Returns:
+            costs (tensor): 1D (n_arms) tensor costs
+        """
+        pass
     
 
     @abc.abstractmethod
@@ -147,9 +156,10 @@ class BaseContextualEnv:
         state_contexts = self.sample_state_contexts(i = self.counter)
         eval_contexts = self.sample_eval_contexts()
         action_contexts = self.sample_action_contexts()
+        costs = self.sample_costs()
 
         #get new state 
-        all_contexts = state_contexts, action_contexts, eval_contexts
+        all_contexts = state_contexts, action_contexts, eval_contexts, costs
         return all_contexts, sampled_rewards, sampled_contexts, self.counter
 
     
@@ -163,7 +173,8 @@ class BaseContextualEnv:
         state_contexts = self.sample_state_contexts()
         eval_contexts = self.sample_eval_contexts()
         action_contexts = self.sample_action_contexts()
-        all_contexts = state_contexts, action_contexts, eval_contexts
+        costs = self.sample_costs()
+        all_contexts = state_contexts, action_contexts, eval_contexts, costs
         return all_contexts, self.counter
     
 
