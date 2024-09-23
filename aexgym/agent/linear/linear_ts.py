@@ -11,13 +11,15 @@ class LinearTS(LinearAgent):
                  toptwo = False, 
                  coin = 0.5, 
                  n_samples = 1000, 
-                 constraint = False, 
+                 constraint = False,
+                 cost_weight = 1, 
                  **kwargs):
         super().__init__(model, name)
         self.toptwo = toptwo
         self.coin = coin
         self.n_samples = n_samples
         self.constraint = constraint
+        self.cost_weight = cost_weight
 
     def get_batch_size(self, contexts):
         return contexts.shape[0]
@@ -33,10 +35,7 @@ class LinearTS(LinearAgent):
         fake_mc = torch.einsum('nkf,nsfd->nksd', features.float(), betas.float())
         fake_rewards = objective(monte_carlo_rewards = fake_mc)
         if self.constraint:
-            fake_rewards = torch.einsum('nks, k->nks', fake_rewards, 1 / costs)
-
-        #print(costs)
-        print(fake_rewards[0, :, 0])
+            fake_rewards = torch.einsum('nks, k->nks', fake_rewards, 1 / (self.cost_weight * costs))
         return fake_rewards
     
     def forward(self, beta, sigma, contexts=None,  action_contexts = None, objective = None, costs=None):

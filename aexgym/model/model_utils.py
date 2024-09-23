@@ -22,6 +22,7 @@ def update_linear_posterior(beta: Tensor,
     batch_size_size = features.shape[0]
     s2_mean = torch.mean(s2, dim=0)
     s2 = s2[idx]
+    standardize=False
     if standardize:
         rewards = (rewards - torch.mean(rewards, dim=0, keepdim=True)) / (s2_mean.to(rewards.device) ** 0.5)
         s2 = s2 / s2_mean
