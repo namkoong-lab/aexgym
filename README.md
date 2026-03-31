@@ -10,11 +10,31 @@ rather than mathematical guarantees on contrived instances.`AExGym` is designed 
 
 ## Installation 
 
-To install dependencies for this project with anaconda, use: 
-```
+The maintained workflow for this repo is the example notebooks in the
+`notebooks/` directory. To create the Conda environment and install the local
+`aexgym` package into it, run:
+
+```bash
 conda env create -f environment.yml
 conda activate aexgym
+python -m ipykernel install --user --name aexgym --display-name aexgym
 ```
+
+Then launch Jupyter from the repository root:
+
+```bash
+jupyter lab
+```
+
+If the environment already exists, update it with:
+
+```bash
+conda env update -f environment.yml --prune
+```
+
+The Hydra scripts under `scripts/` still reference an older `AES` package
+layout. The supported execution path in this repository is the local package
+plus the notebooks.
 
 ## Environments 
 
@@ -31,4 +51,3 @@ The `notebooks` folder contains the code examples for the environments
 described in our paper. Each example contains instructions on how to download 
 and process the datasets used to construct the environment. Datasets go 
 in the `data` folder. 
-

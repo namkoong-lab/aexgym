@@ -25,7 +25,9 @@ class ContextualBestArm(nn.Module):
     def __init__(self):
         super(ContextualBestArm, self).__init__()
 
-    def forward(self, fantasy_rewards, true_rewards=None):
+    def forward(self, fantasy_rewards=None, true_rewards=None, monte_carlo_rewards=None):
+        if fantasy_rewards is None:
+            fantasy_rewards = monte_carlo_rewards
         if true_rewards is None:
             return torch.mean(fantasy_rewards[:, :, :, 0], dim=0, keepdim=True)
         else:
@@ -44,8 +46,10 @@ class ConstraintBestArm(nn.Module):
         self.constraint_vals = constraint_vals
         self.n_objs = 2
     
-    def forward(self, fantasy_rewards, true_rewards=None):
+    def forward(self, fantasy_rewards=None, true_rewards=None, monte_carlo_rewards=None):
         #fake rewards is batch_size x arms x samples x n_objs
+        if fantasy_rewards is None:
+            fantasy_rewards = monte_carlo_rewards
         
         if true_rewards is None:
             demeaned = fantasy_rewards[:, :, :, 1] - torch.mean(fantasy_rewards[:, :, :, 1], dim=1, keepdim=True)
@@ -78,7 +82,9 @@ class MultiObjBestArm(nn.Module):
         self.weights = weights
         self.n_objs = n_objs
     
-    def forward(self, fantasy_rewards, true_rewards=None):
+    def forward(self, fantasy_rewards=None, true_rewards=None, monte_carlo_rewards=None):
+        if fantasy_rewards is None:
+            fantasy_rewards = monte_carlo_rewards
 
         if true_rewards is None:
             return torch.einsum("nksd, d -> nks", fantasy_rewards, self.weights)

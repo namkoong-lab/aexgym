@@ -1,13 +1,22 @@
 name: aexgym
 channels:
   - pytorch
+  - conda-forge
   - defaults
 dependencies:
-  - python
+  - python=3.11
+  - pip
+  - ipykernel
+  - jupyterlab
   - matplotlib
   - numpy
-  - pytorch
   - pandas 
+  - pytorch
   - scikit-learn
   - statsmodels
-
+  - tqdm
+  - hydra-core
+  - omegaconf
+  - pip:
+      - --no-deps
+      - -e .
