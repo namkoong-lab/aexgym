@@ -7,9 +7,9 @@ def make_dict(regret, percent_arms_correct):
     results_dict['percent_arms_correct'] = percent_arms_correct
     return results_dict
 
-class contextual_simple_regret(nn.Module):
+class ContextualSimpleRegret(nn.Module):
     def __init__(self):
-        super(contextual_simple_regret, self).__init__()
+        super(ContextualSimpleRegret, self).__init__()
 
     def forward(self, agent_actions = None, true_rewards = None, monte_carlo_rewards = None, ):
         if monte_carlo_rewards is not None:
@@ -21,9 +21,9 @@ class contextual_simple_regret(nn.Module):
             percent_arms_correct = torch.sum(torch.eq(agent_actions, optimal_actions)).item() / true_rewards.shape[0]
             return make_dict(regret, percent_arms_correct)
 
-class contextual_best_arm(nn.Module):
+class ContextualBestArm(nn.Module):
     def __init__(self):
-        super(contextual_best_arm, self).__init__()
+        super(ContextualBestArm, self).__init__()
 
     def forward(self, fantasy_rewards, true_rewards=None):
         if true_rewards is None:
@@ -38,9 +38,9 @@ class contextual_best_arm(nn.Module):
             return make_dict(regret, percent_arms_correct)
 
 
-class constraint_best_arm(nn.Module):
+class ConstraintBestArm(nn.Module):
     def __init__(self, constraint_vals = 0):
-        super(constraint_best_arm, self).__init__()
+        super(ConstraintBestArm, self).__init__()
         self.constraint_vals = constraint_vals
         self.n_objs = 2
     
@@ -72,9 +72,9 @@ class constraint_best_arm(nn.Module):
             return results_dict
         
 
-class multi_obj_best_arm(nn.Module):
+class MultiObjBestArm(nn.Module):
     def __init__(self, n_objs, weights):
-        super(multi_obj_best_arm, self).__init__()
+        super(MultiObjBestArm, self).__init__()
         self.weights = weights
         self.n_objs = n_objs
     

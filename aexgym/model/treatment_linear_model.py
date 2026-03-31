@@ -4,7 +4,7 @@ from typing import Optional, List
 from aexgym.model.base_model import BaseLinearModel
 
 class TreatmentLinearModel(BaseLinearModel):
-    """
+    r"""
     Assumes true reward model is r(i,a) = c_i + c_a + \epsilon where 
     c_i and c_a are an additive effects corresponding to the context index 
     arm respectively.
@@ -46,7 +46,7 @@ class TreatmentLinearModel(BaseLinearModel):
     
 
 class TreatmentPersonalModel(TreatmentLinearModel):
-    """
+    r"""
     Assumes true reward model is r(i,a) = c_i + c_{i,a} + c_a + \epsilon where 
     c_i and c_a are an additive effects corresponding to the context index 
     arm respectively. c_{i,a} is an index and arm dependent additive effect. 
@@ -91,4 +91,3 @@ class TreatmentPersonalModel(TreatmentLinearModel):
 
         
     
-

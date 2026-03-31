@@ -7,7 +7,7 @@ from aexgym.model.base_model import (
 
 from aexgym.model.personalized_linear_model import (
     PersonalizedLinearModel,
-    fixedPersonalizedModel
+    FixedPersonalizedModel
 )
 from aexgym.model.treatment_linear_model import (
     TreatmentLinearModel,

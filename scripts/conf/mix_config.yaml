@@ -74,5 +74,5 @@ MDP:
 
 
 objective:
-  _target_: 'AES.objectives.regret.constraint_best_arm'
+  _target_: 'AES.objectives.regret.ConstraintBestArm'
   constraint_vals: 0

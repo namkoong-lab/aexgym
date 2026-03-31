@@ -4,7 +4,7 @@ from torch import Tensor
 from aexgym.model import BaseLinearModel
 
 class PersonalizedRankingModel(BaseLinearModel):
-    """
+    r"""
     Assumes the true reward model is r(x,a) = \beta_a^T x. Models personalization settings 
     where arm coefficients do not depend on the context. 
     """
@@ -24,7 +24,7 @@ class PersonalizedRankingModel(BaseLinearModel):
                     actions: Tensor, 
                     contexts: Tensor, 
                     action_contexts: Tensor):
-        """
+        r"""
         Maps an action and context to a feature as follows: 
         - create a zero tensor with length context_len * n_arms 
         - replaces [context_len * a : context_len * (a+1) entries with beta_a

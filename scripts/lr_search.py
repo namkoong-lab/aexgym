@@ -2,7 +2,7 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import OmegaConf, DictConfig
 import torch
-from AES.objectives import contextual_best_arm, contextual_simple_regret
+from AES.objectives import ContextualBestArm, ContextualSimpleRegret
 from AES import run_experiment_simulation
 from tqdm import tqdm
 import json 

@@ -4,7 +4,7 @@ from typing import Optional, List
 from aexgym.model.base_model import BaseLinearModel
 
 class PersonalizedLinearModel(BaseLinearModel):
-    """
+    r"""
     Assumes the true reward model is r(x,a) = \beta_a^T x. Models personalization settings 
     where arm coefficients do not depend on the context. 
     """
@@ -31,7 +31,7 @@ class PersonalizedLinearModel(BaseLinearModel):
                     actions: Tensor, 
                     contexts: Tensor, 
                     action_contexts: Tensor):
-        """
+        r"""
         Maps an action and context to a feature as follows: 
         - create a zero tensor with length context_len * n_arms 
         - replaces [context_len * a : context_len * (a+1) entries with beta_a
@@ -54,8 +54,8 @@ class PersonalizedLinearModel(BaseLinearModel):
         context_array = contexts.repeat(1, self.n_arms)
         return torch.einsum('nk,njk->njk', context_array, arms_array)
     
-class fixedPersonalizedModel(BaseLinearModel):
-    """
+class FixedPersonalizedModel(BaseLinearModel):
+    r"""
     Assumes the true reward model is r(a) = \beta^T z_a, where z_a are the features 
     for arm a. Models personalization settings where there is one set of coefficients for all arms.  
     """
@@ -74,7 +74,7 @@ class fixedPersonalizedModel(BaseLinearModel):
                     actions: Tensor, 
                     contexts: Tensor,
                     action_contexts: Tensor):
-        """
+        r"""
         There are no contexts in this model. Contexts is a batch_size length tensor. 
         Takes in actions and returns the context for each action 
 
@@ -100,4 +100,3 @@ class fixedPersonalizedModel(BaseLinearModel):
         features = torch.cat([action_contexts, -action_contexts], dim=1)
         return features.unsqueeze(0).repeat(batch_size, 1, 1)
      
-
