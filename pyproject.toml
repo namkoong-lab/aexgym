@@ -28,6 +28,9 @@ scripts = [
   "omegaconf",
   "tqdm",
 ]
+dev = [
+  "pytest",
+]
 
 [tool.setuptools.packages.find]
 include = ["aexgym*"]

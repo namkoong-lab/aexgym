@@ -2,5 +2,6 @@ from aexgym import (
     env,
     model,
     objectives,
-    agent
+    agent,
+    metric,
 )
