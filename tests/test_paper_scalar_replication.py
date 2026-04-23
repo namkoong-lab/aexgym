@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import torch
 
-from aexgym.experiments.paper_scalar_compare import compare_config
-from aexgym.experiments.paper_scalar_replication import PaperScalarConfig, make_model
-from aexgym.experiments.paper_scalar_variant_check import VariantCheckConfig, run_variant_trial
+from aexgym.legacy_parity.compare_adaptive import compare_config
+from aexgym.legacy_parity.scalar_replication import PaperScalarConfig, make_model
+from aexgym.legacy_parity.variant_check import VariantCheckConfig, run_variant_trial
 
 
 AES_ROOT = Path(__file__).resolve().parents[2]

@@ -9,20 +9,22 @@ from typing import Any
 import numpy as np
 import torch
 
-from aexgym.metric import (
-    ConstantAllocationParameterization,
+from aexgym.core import (
     ExperimentInstance,
     ExperimentRunner,
     GaussianMetricModel,
+    NoActiveSetRule,
+    aggregate_results,
+)
+from aexgym.policies import (
+    ConstantAllocationParameterization,
+    NoSequenceRegularizer,
+    ReducedTerminalRhoSimulation,
+    RhoPolicy,
     GaussianThompsonPolicy,
     GaussianTopTwoThompsonPolicy,
     MyopicLookaheadPolicy,
-    NoSequenceRegularizer,
-    NoActiveSetRule,
-    ReducedTerminalRhoSimulation,
-    RhoPolicy,
     UniformActivePolicy,
-    aggregate_results,
 )
 
 
@@ -36,7 +38,6 @@ SCALAR_SCENARIOS = {
     "nonuniform_prior",
     "unknown_variance",
     "horizon_misspecification",
-    "asos_scalar",
 }
 
 
@@ -54,7 +55,6 @@ class ScalarParityConfig:
     mean_scale: float = 0.1
     prior_pattern: str = "flat"
     policies: list[str] = field(default_factory=lambda: ["uniform", "ts", "ttts", "myopic", "constant_rho"])
-    asos_path: str | None = None
     output: str | None = None
 
 
@@ -105,12 +105,6 @@ def make_model(config: ScalarParityConfig) -> GaussianMetricModel:
 
 def make_instance(config: ScalarParityConfig, model: GaussianMetricModel, seed: int) -> ExperimentInstance:
     rng = np.random.default_rng(seed)
-    if config.scenario == "asos_scalar":
-        if config.asos_path is None:
-            raise ValueError("asos_scalar requires asos_path pointing to a JSON or CSV file with true_theta")
-        true_theta = load_asos_scalar_theta(config.asos_path, config.n_arms)
-        return ExperimentInstance(true_theta=true_theta, name="asos_scalar", metadata={"scenario": config.scenario})
-
     if config.scenario == "beta_bernoulli":
         alpha = np.full(config.n_arms, 100.0)
         beta = np.full(config.n_arms, 100.0)
@@ -127,19 +121,6 @@ def make_instance(config: ScalarParityConfig, model: GaussianMetricModel, seed: 
 
     true_theta = torch.as_tensor(true_values, dtype=torch.float64).reshape(config.n_arms, 1)
     return ExperimentInstance(true_theta=true_theta, name=config.scenario, metadata={"scenario": config.scenario})
-
-
-def load_asos_scalar_theta(path: str, n_arms: int) -> torch.Tensor:
-    path_obj = Path(path)
-    if path_obj.suffix.lower() == ".json":
-        data = json.loads(path_obj.read_text())
-        values = data["true_theta"] if isinstance(data, dict) else data
-    else:
-        values = np.loadtxt(path_obj, delimiter=",", ndmin=1)
-    theta = torch.as_tensor(values, dtype=torch.float64).reshape(-1, 1)
-    if theta.shape[0] < n_arms:
-        raise ValueError("ASOS true_theta file has fewer arms than requested")
-    return theta[:n_arms]
 
 
 def make_policies(config: ScalarParityConfig) -> dict[str, Any]:

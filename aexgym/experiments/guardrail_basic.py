@@ -8,13 +8,16 @@ from typing import Any
 
 import torch
 
-from aexgym.metric import (
+from aexgym.core import (
     ActiveSetRule,
-    BasePlusResidualLogitParameterization,
-    ConstantAllocationParameterization,
     ExperimentInstance,
     ExperimentRunner,
     GaussianMetricModel,
+    aggregate_results,
+)
+from aexgym.policies import (
+    BasePlusResidualLogitParameterization,
+    ConstantAllocationParameterization,
     GaussianThompsonPolicy,
     GaussianTopTwoThompsonPolicy,
     MyopicLookaheadPolicy,
@@ -24,7 +27,6 @@ from aexgym.metric import (
     RhoPolicy,
     TemporalUniformityRegularizer,
     UniformActivePolicy,
-    aggregate_results,
 )
 
 

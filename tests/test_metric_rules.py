@@ -1,6 +1,6 @@
 import torch
 
-from aexgym.metric import ActiveSetRule, GaussianMetricState
+from aexgym.core import ActiveSetRule, GaussianMetricState
 
 
 def make_state(mean, active=None):

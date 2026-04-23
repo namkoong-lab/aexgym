@@ -5,29 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aexgym"
 version = "0.1.0"
-description = "Benchmarks and environments for adaptive experimentation"
+description = "Paper-focused adaptive experimentation package for Gaussian metric experiments"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
-  "matplotlib",
   "numpy",
-  "pandas",
-  "scikit-learn",
-  "statsmodels",
+  "scipy",
   "torch",
 ]
 
 [project.optional-dependencies]
-notebooks = [
-  "ipykernel",
-  "jupyterlab",
-]
-scripts = [
-  "hydra-core",
-  "omegaconf",
-  "tqdm",
-]
 dev = [
   "pytest",
 ]

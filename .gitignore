@@ -1,5 +1,6 @@
 # Custom
-data/
+data/*
+!data/asos_digital_experiments_dataset.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

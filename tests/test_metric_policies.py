@@ -1,7 +1,7 @@
 import torch
 
-from aexgym.metric import (
-    GaussianMetricModel,
+from aexgym.core import GaussianMetricModel
+from aexgym.policies import (
     GaussianThompsonPolicy,
     GaussianTopTwoThompsonPolicy,
     MyopicLookaheadPolicy,

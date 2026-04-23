@@ -6,17 +6,10 @@ channels:
 dependencies:
   - python=3.11
   - pip
-  - ipykernel
-  - jupyterlab
-  - matplotlib
   - numpy
-  - pandas 
   - pytorch
-  - scikit-learn
-  - statsmodels
-  - tqdm
-  - hydra-core
-  - omegaconf
+  - scipy
+  - pytest
   - pip:
       - --no-deps
       - -e .

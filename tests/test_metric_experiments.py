@@ -65,9 +65,7 @@ def test_reproducibility_with_fixed_seed():
 
 
 def test_scalar_scenario_config_smoke():
-    # ASOS requires a user-supplied data path, so smoke the registry but do not run it.
-    assert "asos_scalar" in SCALAR_SCENARIOS
-    for scenario in sorted(SCALAR_SCENARIOS - {"asos_scalar"}):
+    for scenario in sorted(SCALAR_SCENARIOS):
         config = ScalarParityConfig(
             scenario=scenario,
             n_arms=3,

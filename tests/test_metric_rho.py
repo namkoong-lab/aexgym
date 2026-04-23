@@ -1,11 +1,10 @@
 import torch
 
-from aexgym.metric import (
-    ActiveSetRule,
+from aexgym.core import ActiveSetRule, GaussianMetricModel
+from aexgym.policies import (
     BasePlusResidualLogitParameterization,
     ConstantAllocationParameterization,
     FreeSequenceParameterization,
-    GaussianMetricModel,
     NoSequenceRegularizer,
     PathwiseStoppedRhoSimulation,
     ReducedTerminalRhoSimulation,

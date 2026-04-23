@@ -1,6 +1,6 @@
 import torch
 
-from aexgym.metric import GaussianMetricModel
+from aexgym.core import GaussianMetricModel
 
 
 def test_j1_update_matches_scalar_recursion():
