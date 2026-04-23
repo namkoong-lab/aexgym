@@ -4,7 +4,6 @@ import argparse
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -17,18 +16,15 @@ from aexgym.core import (
     aggregate_results,
 )
 from aexgym.policies import (
-    ConstantAllocationParameterization,
-    NoSequenceRegularizer,
-    ReducedTerminalRhoSimulation,
-    RhoPolicy,
     GaussianThompsonPolicy,
     GaussianTopTwoThompsonPolicy,
     MyopicLookaheadPolicy,
     UniformActivePolicy,
 )
+from aexgym.experiments.parity.rho_variants import DEFAULT_PARITY_RHO_VARIANTS, build_rho_policy
 
 
-SCALAR_SCENARIOS = {
+PARITY_SCENARIOS = {
     "exact_gaussian",
     "beta_bernoulli",
     "gamma_gumbel",
@@ -39,6 +35,8 @@ SCALAR_SCENARIOS = {
     "unknown_variance",
     "horizon_misspecification",
 }
+
+BASELINE_POLICIES: tuple[str, ...] = ("uniform", "ts", "ttts", "myopic")
 
 
 @dataclass
@@ -54,7 +52,12 @@ class ScalarParityConfig:
     obs_var: float = 1.0
     mean_scale: float = 0.1
     prior_pattern: str = "flat"
-    policies: list[str] = field(default_factory=lambda: ["uniform", "ts", "ttts", "myopic", "constant_rho"])
+    baseline_policies: list[str] = field(default_factory=lambda: list(BASELINE_POLICIES))
+    rho_variants: list[str] = field(default_factory=lambda: ["reduced_constant"])
+    rho_epochs: int = 60
+    rho_num_samples: int = 256
+    rho_lr: float = 0.08
+    rho_temporal_regularization: float = 300.0
     output: str | None = None
 
 
@@ -123,9 +126,9 @@ def make_instance(config: ScalarParityConfig, model: GaussianMetricModel, seed: 
     return ExperimentInstance(true_theta=true_theta, name=config.scenario, metadata={"scenario": config.scenario})
 
 
-def make_policies(config: ScalarParityConfig) -> dict[str, Any]:
-    policies: dict[str, Any] = {}
-    for name in config.policies:
+def make_policies(config: ScalarParityConfig) -> dict[str, object]:
+    policies: dict[str, object] = {}
+    for name in config.baseline_policies:
         if name == "uniform":
             policies[name] = UniformActivePolicy(name="uniform")
         elif name == "ts":
@@ -134,27 +137,28 @@ def make_policies(config: ScalarParityConfig) -> dict[str, Any]:
             policies[name] = GaussianTopTwoThompsonPolicy(n_samples=512, coin=0.5, name="ttts")
         elif name == "myopic":
             policies[name] = MyopicLookaheadPolicy(epochs=40, num_zs=128, lr=0.08, name="myopic")
-        elif name == "constant_rho":
-            policies[name] = RhoPolicy(
-                simulator=ReducedTerminalRhoSimulation(),
-                parameterization=ConstantAllocationParameterization(),
-                regularizer=NoSequenceRegularizer(),
-                epochs=60,
-                num_samples=256,
-                lr=0.08,
-                name="constant_rho",
-            )
         else:
-            raise ValueError(f"unknown policy: {name}")
+            raise ValueError(f"unknown baseline policy: {name}")
+    for variant in config.rho_variants:
+        policies[variant] = build_rho_policy(
+            variant,
+            target_idx=0,
+            epochs=config.rho_epochs,
+            num_samples=config.rho_num_samples,
+            lr=config.rho_lr,
+            temporal_regularization=config.rho_temporal_regularization,
+        )
     return policies
 
 
 def run_config(config: ScalarParityConfig) -> dict:
-    if config.scenario not in SCALAR_SCENARIOS:
-        raise ValueError(f"unknown scenario {config.scenario}; choose one of {sorted(SCALAR_SCENARIOS)}")
+    if config.scenario not in PARITY_SCENARIOS:
+        raise ValueError(f"unknown scenario {config.scenario}; choose one of {sorted(PARITY_SCENARIOS)}")
     model = make_model(config)
     runner = ExperimentRunner(model, active_rule=NoActiveSetRule(target_idx=0))
     policies = make_policies(config)
+    if not policies:
+        raise ValueError("at least one baseline policy or rho variant must be configured")
     seeds = [config.seed + i for i in range(config.n_runs)]
     per_policy = {}
     aggregates = {}
@@ -177,10 +181,18 @@ def main() -> None:
     parser.add_argument("--config", type=str, default=None, help="Path to JSON config.")
     parser.add_argument("--output", type=str, default=None, help="Optional output JSON path.")
     parser.add_argument("--list-scenarios", action="store_true", help="Print available scenario names.")
+    parser.add_argument("--list-baselines", action="store_true", help="Print available non-RHO baseline policy names.")
+    parser.add_argument("--list-rho-variants", action="store_true", help="Print available parity RHO variant names.")
     args = parser.parse_args()
 
     if args.list_scenarios:
-        print(json.dumps(sorted(SCALAR_SCENARIOS), indent=2))
+        print(json.dumps(sorted(PARITY_SCENARIOS), indent=2))
+        return
+    if args.list_baselines:
+        print(json.dumps(list(BASELINE_POLICIES), indent=2))
+        return
+    if args.list_rho_variants:
+        print(json.dumps(list(DEFAULT_PARITY_RHO_VARIANTS), indent=2))
         return
 
     config = load_config(args.config)

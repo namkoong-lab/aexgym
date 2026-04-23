@@ -6,8 +6,10 @@ experimentation model. The maintained package surface is organized around:
 - `aexgym.core`: posterior state, Gaussian conjugate model, active-set rules,
   and the shared experiment runner
 - `aexgym.policies`: standard policies and the compositional RHO implementation
-- `aexgym.experiments`: maintained experiment entry points for scalar parity and
-  the basic guardrail experiment
+- `aexgym.experiments.parity`: new-code replications of the previous paper,
+  including a sweep layer for comparing multiple RHO configurations
+- `aexgym.experiments.revision`: revision-specific experiments, currently only
+  the basic synthetic guardrail study
 - `aexgym.legacy_parity`: temporary validation code used to compare against the
   older scalar implementation in the sibling `adaptive-experimentation` repo
 
@@ -34,8 +36,9 @@ conda env update -f environment.yml --prune
 Run the maintained experiments with:
 
 ```bash
-python -m aexgym.experiments.scalar_parity --help
-python -m aexgym.experiments.guardrail_basic --help
+python -m aexgym.experiments.parity.scalar --help
+python -m aexgym.experiments.parity.suite --help
+python -m aexgym.experiments.revision.basic_guardrail --help
 ```
 
 Run the temporary parity validation tools with:

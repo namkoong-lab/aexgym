@@ -1,7 +1,8 @@
 import torch
 
-from aexgym.experiments.guardrail_basic import GuardrailBasicConfig, run_config as run_guardrail
-from aexgym.experiments.scalar_parity import SCALAR_SCENARIOS, ScalarParityConfig, run_config as run_scalar
+from aexgym.experiments.parity.scalar import PARITY_SCENARIOS, ScalarParityConfig, run_config as run_scalar
+from aexgym.experiments.parity.suite import ParitySweepConfig, run_sweep
+from aexgym.experiments.revision.basic_guardrail import GuardrailBasicConfig, run_config as run_guardrail
 
 
 def test_tiny_scalar_parity_run_logs_expected_fields():
@@ -10,7 +11,8 @@ def test_tiny_scalar_parity_run_logs_expected_fields():
         n_arms=3,
         horizon=2,
         n_runs=2,
-        policies=["uniform", "ts"],
+        baseline_policies=["uniform", "ts"],
+        rho_variants=[],
         seed=7,
     )
 
@@ -54,7 +56,8 @@ def test_reproducibility_with_fixed_seed():
         n_arms=3,
         horizon=2,
         n_runs=2,
-        policies=["uniform"],
+        baseline_policies=["uniform"],
+        rho_variants=[],
         seed=123,
     )
 
@@ -65,14 +68,32 @@ def test_reproducibility_with_fixed_seed():
 
 
 def test_scalar_scenario_config_smoke():
-    for scenario in sorted(SCALAR_SCENARIOS):
+    for scenario in sorted(PARITY_SCENARIOS):
         config = ScalarParityConfig(
             scenario=scenario,
             n_arms=3,
             horizon=2,
             n_runs=1,
-            policies=["uniform"],
+            baseline_policies=["uniform"],
+            rho_variants=[],
             seed=3,
         )
         payload = run_scalar(config)
         assert "uniform" in payload["aggregates"]
+
+
+def test_parity_sweep_collects_rho_variant_summaries():
+    config = ParitySweepConfig(
+        scenarios=["exact_gaussian"],
+        n_arms=3,
+        horizon=2,
+        n_runs=1,
+        baseline_policies=["uniform"],
+        rho_variants=["reduced_constant", "pathwise_constant"],
+        seed=19,
+    )
+
+    payload = run_sweep(config)
+
+    assert set(payload["scenario_results"]) == {"exact_gaussian"}
+    assert set(payload["rho_variant_summaries"]["exact_gaussian"]) == {"reduced_constant", "pathwise_constant"}

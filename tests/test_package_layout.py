@@ -15,6 +15,8 @@ def test_import_smoke_for_supported_namespaces():
         "aexgym.core",
         "aexgym.policies",
         "aexgym.experiments",
+        "aexgym.experiments.parity",
+        "aexgym.experiments.revision",
         "aexgym.legacy_parity",
     ]:
         importlib.import_module(module_name)
@@ -30,7 +32,7 @@ def test_maintained_code_does_not_import_removed_or_legacy_namespaces():
         "aexgym.legacy_parity",
     ]
     for subdir in ["core", "policies", "experiments"]:
-        for path in (PACKAGE_ROOT / subdir).glob("*.py"):
+        for path in (PACKAGE_ROOT / subdir).rglob("*.py"):
             text = path.read_text()
             for pattern in forbidden:
                 assert pattern not in text, f"{path} still references {pattern}"
@@ -38,8 +40,9 @@ def test_maintained_code_does_not_import_removed_or_legacy_namespaces():
 
 def test_cli_help_smoke():
     modules = [
-        "aexgym.experiments.scalar_parity",
-        "aexgym.experiments.guardrail_basic",
+        "aexgym.experiments.parity.scalar",
+        "aexgym.experiments.parity.suite",
+        "aexgym.experiments.revision.basic_guardrail",
         "aexgym.legacy_parity.scalar_replication",
         "aexgym.legacy_parity.compare_adaptive",
         "aexgym.legacy_parity.variant_check",

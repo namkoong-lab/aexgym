@@ -1,5 +1,5 @@
-"""Maintained paper experiment entry points."""
+"""Maintained paper experiment namespaces."""
 
-from . import guardrail_basic, scalar_parity
+from . import parity, revision
 
-__all__ = ["guardrail_basic", "scalar_parity"]
+__all__ = ["parity", "revision"]
