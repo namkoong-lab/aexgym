@@ -77,6 +77,12 @@ def _project_sequence(sequence: Tensor, state: GaussianMetricState) -> Tensor:
 
 
 class ReducedTerminalRhoSimulation:
+    def __init__(self, sample_method: str = "normal", sobol_seed: int = 42) -> None:
+        if sample_method not in {"normal", "sobol"}:
+            raise ValueError("sample_method must be 'normal' or 'sobol'")
+        self.sample_method = sample_method
+        self.sobol_seed = int(sobol_seed)
+
     def prepare(
         self,
         state: GaussianMetricState,
@@ -86,7 +92,12 @@ class ReducedTerminalRhoSimulation:
         generator: Optional[torch.Generator],
     ) -> Tensor:
         del horizon
-        return torch.randn(num_samples, state.n_arms, dtype=state.mean.dtype, device=state.mean.device, generator=generator)
+        if self.sample_method == "normal":
+            return torch.randn(num_samples, state.n_arms, dtype=state.mean.dtype, device=state.mean.device, generator=generator)
+        sobol = torch.quasirandom.SobolEngine(state.n_arms, scramble=True, seed=self.sobol_seed)
+        u = sobol.draw(num_samples).to(dtype=state.mean.dtype, device=state.mean.device)
+        u = torch.clamp(u, min=torch.finfo(u.dtype).eps, max=1.0 - torch.finfo(u.dtype).eps)
+        return torch.sqrt(torch.tensor(2.0, dtype=u.dtype, device=u.device)) * torch.erfinv(2.0 * u - 1.0)
 
     def evaluate(
         self,

@@ -66,11 +66,12 @@ def build_rho_policy(
     num_samples: int,
     lr: float,
     temporal_regularization: float,
+    sample_method: str = "sobol",
     name: str | None = None,
 ) -> RhoPolicy:
     spec = PARITY_RHO_VARIANTS[variant]
     if spec.simulator == "reduced":
-        simulator = ReducedTerminalRhoSimulation()
+        simulator = ReducedTerminalRhoSimulation(sample_method=sample_method)
     elif spec.simulator == "pathwise":
         simulator = PathwiseStoppedRhoSimulation(ActiveSetRule(target_idx=target_idx, stop_on_singleton=False))
     else:
