@@ -82,7 +82,7 @@ def make_model(mu_0: np.ndarray, sigma2_0: np.ndarray, s2: np.ndarray, horizon: 
     prior_mean = torch.as_tensor(mu_0, dtype=torch.float64).reshape(-1, 1)
     prior_cov = torch.as_tensor(sigma2_0, dtype=torch.float64).reshape(-1, 1, 1)
     obs_cov = torch.as_tensor(s2, dtype=torch.float64).reshape(-1, 1, 1)
-    return GaussianMetricModel(prior_mean, prior_cov, obs_cov, target_idx=0, batch_sizes=torch.ones(horizon, dtype=torch.float64))
+    return GaussianMetricModel(prior_mean, prior_cov, obs_cov, target_metric_idx=0, batch_sizes=torch.ones(horizon, dtype=torch.float64))
 
 
 class PaperBandit:
@@ -132,7 +132,7 @@ class LegacyTS(LegacyPolicy):
         self.n_samples = n_samples
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> Tensor:
-        p = sample_posterior(_state_mu(state), _state_sigma2(state), self.n_samples)
+        p = sample_posterior(_state_mu(state, model), _state_sigma2(state, model), self.n_samples)
         p = np.clip(p, 1e-10, None)
         p = p / p.sum()
         return torch.as_tensor(p, dtype=torch.float64)
@@ -151,7 +151,7 @@ class LegacyTTTS(LegacyPolicy):
         found_other = False
         counter = 1
         while (not found_other) and counter <= self.max_redraw:
-            p = sample_posterior(_state_mu(state), _state_sigma2(state), self.n_samples)
+            p = sample_posterior(_state_mu(state, model), _state_sigma2(state, model), self.n_samples)
             if sum(1 for p_arm in p if p_arm > 0) > 1:
                 found_other = True
             counter += 1
@@ -176,8 +176,8 @@ class LegacyMyopic(LegacyPolicy):
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> Tensor:
         p = solve_legacy_state(
-            mu=_state_mu(state),
-            sigma2=_state_sigma2(state),
+            mu=_state_mu(state, model),
+            sigma2=_state_sigma2(state, model),
             s2=_model_s2(model),
             scale=1.0,
             eps=self.eps,
@@ -201,8 +201,8 @@ class LegacyRho(LegacyPolicy):
         residual = model.horizon - state.t
         s2_t = _model_s2(model) / (self.boost * residual)
         p = solve_legacy_state(
-            mu=_state_mu(state),
-            sigma2=_state_sigma2(state),
+            mu=_state_mu(state, model),
+            sigma2=_state_sigma2(state, model),
             s2=s2_t,
             scale=float(residual),
             eps=self.eps,
@@ -213,12 +213,12 @@ class LegacyRho(LegacyPolicy):
         return torch.as_tensor(p / p.sum(), dtype=torch.float64)
 
 
-def _state_mu(state: GaussianMetricState) -> np.ndarray:
-    return state.mean[:, 0].detach().cpu().numpy()
+def _state_mu(state: GaussianMetricState, model: GaussianMetricModel) -> np.ndarray:
+    return model.target_mean(state).detach().cpu().numpy()
 
 
-def _state_sigma2(state: GaussianMetricState) -> np.ndarray:
-    return state.cov[:, 0, 0].detach().cpu().numpy()
+def _state_sigma2(state: GaussianMetricState, model: GaussianMetricModel) -> np.ndarray:
+    return model.target_variance(state).detach().cpu().numpy()
 
 
 def _model_s2(model: GaussianMetricModel) -> np.ndarray:
@@ -312,7 +312,7 @@ def run_policy_path(model: GaussianMetricModel, bandit: PaperBandit, policy: Leg
         observation_y = aggregate_g
         observation = torch.as_tensor(observation_y, dtype=torch.float64).reshape(model.n_arms, 1)
         state = model.update(state, torch.as_tensor(p, dtype=torch.float64), observation)
-    return state.selected_arm(model.target_idx), allocations
+    return model.selected_arm(state), allocations
 
 
 def sample_theta(config: PaperScalarConfig, alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:

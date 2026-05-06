@@ -17,13 +17,10 @@ from aexgym.core import (
 )
 from aexgym.policies import (
     BasePlusResidualLogitParameterization,
-    ConstantAllocationParameterization,
     GaussianThompsonPolicy,
     GaussianTopTwoThompsonPolicy,
     MyopicLookaheadPolicy,
-    NoSequenceRegularizer,
-    PathwiseStoppedRhoSimulation,
-    ReducedTerminalRhoSimulation,
+    PathwiseActiveSetRhoSimulation,
     RhoPolicy,
     TemporalUniformityRegularizer,
     UniformActivePolicy,
@@ -37,13 +34,16 @@ class GuardrailBasicConfig:
     batch_sizes: list[float] = field(default_factory=lambda: [0.25, 0.5, 1.0, 1.0, 1.0])
     n_runs: int = 20
     seed: int = 11
-    control_arm: int = 0
-    target_idx: int = 0
-    guardrail_idx: int = 1
+    control_arm_idx: int = 0
+    target_metric_idx: int = 0
+    guardrail_metric_idx: int = 1
     guardrail_floor: float = -0.25
     violation_prob_threshold: float = 0.8
-    open_loop_temporal_regularization: float = 300.0
-    policies: list[str] = field(default_factory=lambda: ["uniform", "ts", "ttts", "myopic", "constant_rho", "openloop_stopped_rho"])
+    rho_temporal_regularization: float = 300.0
+    rho_active_beta: float = 10.0
+    rho_terminal_beta: float = 25.0
+    rho_optimization_seed: int | None = None
+    policies: list[str] = field(default_factory=lambda: ["uniform", "ts", "ttts", "myopic", "rho"])
     output: str | None = None
 
 
@@ -76,9 +76,9 @@ def make_model(config: GuardrailBasicConfig) -> GaussianMetricModel:
         prior_mean=prior_mean,
         prior_cov=prior_cov,
         obs_cov=obs_cov,
-        target_idx=config.target_idx,
+        target_metric_idx=config.target_metric_idx,
         batch_sizes=batch_sizes,
-        control_arm=config.control_arm,
+        control_arm_idx=config.control_arm_idx,
     )
 
 
@@ -104,9 +104,9 @@ def make_instance(config: GuardrailBasicConfig) -> ExperimentInstance:
 
 def make_rule(config: GuardrailBasicConfig) -> ActiveSetRule:
     return ActiveSetRule(
-        target_idx=config.target_idx,
-        control_arm=config.control_arm,
-        guardrail_indices=[config.guardrail_idx],
+        target_metric_idx=config.target_metric_idx,
+        control_arm_idx=config.control_arm_idx,
+        guardrail_metric_indices=[config.guardrail_metric_idx],
         guardrail_floors=[config.guardrail_floor],
         violation_prob_threshold=config.violation_prob_threshold,
     )
@@ -123,25 +123,18 @@ def make_policies(config: GuardrailBasicConfig, rule: ActiveSetRule) -> dict[str
             policies[name] = GaussianTopTwoThompsonPolicy(n_samples=512, coin=0.5, name="ttts")
         elif name == "myopic":
             policies[name] = MyopicLookaheadPolicy(epochs=40, num_zs=128, lr=0.06, name="myopic")
-        elif name == "constant_rho":
+        elif name == "rho":
             policies[name] = RhoPolicy(
-                simulator=ReducedTerminalRhoSimulation(),
-                parameterization=ConstantAllocationParameterization(),
-                regularizer=NoSequenceRegularizer(),
-                epochs=60,
-                num_samples=256,
-                lr=0.06,
-                name="constant_rho",
-            )
-        elif name == "openloop_stopped_rho":
-            policies[name] = RhoPolicy(
-                simulator=PathwiseStoppedRhoSimulation(rule),
+                simulator=PathwiseActiveSetRhoSimulation(rule),
                 parameterization=BasePlusResidualLogitParameterization(),
-                regularizer=TemporalUniformityRegularizer(weight=config.open_loop_temporal_regularization),
+                regularizer=TemporalUniformityRegularizer(weight=config.rho_temporal_regularization),
                 epochs=40,
                 num_samples=64,
                 lr=0.05,
-                name="openloop_stopped_rho",
+                active_beta=config.rho_active_beta,
+                terminal_beta=config.rho_terminal_beta,
+                optimization_seed=config.rho_optimization_seed,
+                name="rho",
             )
         else:
             raise ValueError(f"unknown policy: {name}")

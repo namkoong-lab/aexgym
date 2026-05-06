@@ -8,7 +8,7 @@ from aexgym.policies import (
     ConstantAllocationParameterization,
     FreeSequenceParameterization,
     NoSequenceRegularizer,
-    PathwiseStoppedRhoSimulation,
+    PathwiseActiveSetRhoSimulation,
     ReducedTerminalRhoSimulation,
     RhoPolicy,
     TemporalUniformityRegularizer,
@@ -61,19 +61,20 @@ DEFAULT_PARITY_RHO_VARIANTS: tuple[str, ...] = tuple(PARITY_RHO_VARIANTS)
 def build_rho_policy(
     variant: str,
     *,
-    target_idx: int = 0,
+    target_metric_idx: int = 0,
     epochs: int,
     num_samples: int,
     lr: float,
     temporal_regularization: float,
     sample_method: str = "sobol",
+    optimization_seed: int | None = None,
     name: str | None = None,
 ) -> RhoPolicy:
     spec = PARITY_RHO_VARIANTS[variant]
     if spec.simulator == "reduced":
         simulator = ReducedTerminalRhoSimulation(sample_method=sample_method)
     elif spec.simulator == "pathwise":
-        simulator = PathwiseStoppedRhoSimulation(ActiveSetRule(target_idx=target_idx, stop_on_singleton=False))
+        simulator = PathwiseActiveSetRhoSimulation(ActiveSetRule(target_metric_idx=target_metric_idx))
     else:
         raise ValueError(f"unknown simulator: {spec.simulator}")
 
@@ -100,5 +101,6 @@ def build_rho_policy(
         epochs=epochs,
         num_samples=num_samples,
         lr=lr,
+        optimization_seed=optimization_seed,
         name=variant if name is None else name,
     )

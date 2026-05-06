@@ -20,7 +20,7 @@ from aexgym.policies import (
     BasePlusResidualLogitParameterization,
     ConstantAllocationParameterization,
     NoSequenceRegularizer,
-    PathwiseStoppedRhoSimulation,
+    PathwiseActiveSetRhoSimulation,
     ReducedTerminalRhoSimulation,
     RhoPolicy,
     TemporalUniformityRegularizer,
@@ -61,7 +61,7 @@ def make_metric_model(
         prior_mean=prior_mean,
         prior_cov=prior_cov,
         obs_cov=obs_cov,
-        target_idx=0,
+        target_metric_idx=0,
         batch_sizes=torch.ones(horizon, dtype=torch.float64),
     )
 
@@ -95,9 +95,9 @@ def make_policy(config: VariantCheckConfig, variant: str):
             name=variant,
         )
     if variant == "pathwise_j2_ignored":
-        rule = ActiveSetRule(target_idx=0, stop_on_singleton=False)
+        rule = ActiveSetRule(target_metric_idx=0)
         return RhoPolicy(
-            simulator=PathwiseStoppedRhoSimulation(rule),
+            simulator=PathwiseActiveSetRhoSimulation(rule),
             parameterization=BasePlusResidualLogitParameterization(),
             regularizer=TemporalUniformityRegularizer(weight=config.open_loop_temporal_regularization),
             epochs=config.rho_epochs if config.open_loop_epochs is None else config.open_loop_epochs,
@@ -134,12 +134,12 @@ def run_variant_trial(config: VariantCheckConfig, seed: int, variant: str) -> di
         rewards, arm_draws = bandit.sample_arms(p)
         demeaned_rewards = rewards - arm_draws * bandit.base_reward
         aggregate_g = bandit.mean_scale * demeaned_rewards
-        observation = torch.zeros_like(state.mean)
+        observation = torch.zeros(model.n_arms, model.n_metrics, dtype=torch.float64)
         observation[:, 0] = torch.as_tensor(aggregate_g, dtype=torch.float64)
         state = model.update(state, allocation, observation)
         allocations.append([float(x) for x in p.tolist()])
 
-    selected_arm = state.selected_arm(model.target_idx)
+    selected_arm = model.selected_arm(state)
     true_best_arm = int(np.argmax(theta))
     return {
         "seed": seed,

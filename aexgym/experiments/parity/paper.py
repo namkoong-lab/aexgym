@@ -428,7 +428,7 @@ def _write_aggregate_csv(path: Path, rows: list[dict]) -> None:
         "selected_true_best_rate",
         "simple_regret_percent_of_uniform",
         "model_n_metrics",
-        "target_idx",
+        "target_metric_idx",
     ]
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

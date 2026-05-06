@@ -7,8 +7,7 @@ import torch
 from torch import Tensor
 
 from aexgym.core.model import GaussianMetricModel
-from aexgym.core.rules import ActiveSetRule, NoActiveSetRule
-from aexgym.core.state import active_indices_to_list
+from aexgym.core.rules import ActiveSetRule, NoActiveSetRule, SmoothingConfig
 
 
 @dataclass(frozen=True)
@@ -24,13 +23,11 @@ class RunResult:
     seed: int
     selected_arm: int
     true_best_arm: int
-    stop_time: int
-    stopped: bool
-    stop_reason: str
+    completed_stages: int
     simple_regret: float
     guardrail_violation: bool
     unsafe_exposure: float
-    active_path: list[list[int]]
+    active_path: list[list[float]]
     allocation_path: list[list[float]]
     metadata: dict = field(default_factory=dict)
 
@@ -43,19 +40,19 @@ def aggregate_results(results: Sequence[RunResult]) -> dict:
         return {}
     regrets = torch.tensor([r.simple_regret for r in results], dtype=torch.float64)
     selected_true_best = torch.tensor([r.selected_arm == r.true_best_arm for r in results], dtype=torch.float64)
-    stops = torch.tensor([r.stop_time for r in results], dtype=torch.float64)
+    completed_stages = torch.tensor([r.completed_stages for r in results], dtype=torch.float64)
     violations = torch.tensor([r.guardrail_violation for r in results], dtype=torch.float64)
     exposures = torch.tensor([r.unsafe_exposure for r in results], dtype=torch.float64)
-    active_lengths = [len(path) for r in results for path in r.active_path]
+    active_mass = torch.tensor([sum(path) for r in results for path in r.active_path], dtype=torch.float64)
     return {
         "n_runs": len(results),
         "mean_simple_regret": float(regrets.mean().item()),
         "se_simple_regret": float((regrets.std(unbiased=False) / max(len(results), 1) ** 0.5).item()),
         "selected_true_best_rate": float(selected_true_best.mean().item()),
-        "average_stop_time": float(stops.mean().item()),
+        "average_completed_stages": float(completed_stages.mean().item()),
         "violation_rate": float(violations.mean().item()),
         "average_unsafe_exposure": float(exposures.mean().item()),
-        "average_active_arms_logged": float(torch.tensor(active_lengths, dtype=torch.float64).mean().item()),
+        "average_active_mass_logged": float(active_mass.mean().item()),
     }
 
 
@@ -66,9 +63,11 @@ class ExperimentRunner:
         self,
         model: GaussianMetricModel,
         active_rule: Optional[ActiveSetRule] = None,
+        smoothing: Optional[SmoothingConfig] = None,
     ) -> None:
         self.model = model
-        self.active_rule = active_rule or NoActiveSetRule(target_idx=model.target_idx)
+        self.active_rule = active_rule or NoActiveSetRule(target_metric_idx=model.target_metric_idx)
+        self.smoothing = smoothing or SmoothingConfig()
 
     def run_one(self, instance: ExperimentInstance, policy, seed: int) -> RunResult:
         true_theta = torch.as_tensor(instance.true_theta, dtype=self.model.prior_mean.dtype, device=self.model.prior_mean.device)
@@ -81,11 +80,11 @@ class ExperimentRunner:
         generator.manual_seed(int(seed))
 
         state = self.model.initial_state()
-        active_path = [active_indices_to_list(state.active)]
+        active_path = [[float(x) for x in state.active.detach().cpu().tolist()]]
         allocation_path: list[list[float]] = []
         unsafe_exposure = 0.0
 
-        while state.t < self.model.horizon and not state.stopped:
+        while state.t < self.model.horizon:
             allocation = policy.allocate(state, self.model)
             allocation = self.model.validate_allocation(state, allocation)
             allocation_path.append([float(x) for x in allocation.detach().cpu().tolist()])
@@ -96,16 +95,12 @@ class ExperimentRunner:
 
             observation = self.model.sample_observation(true_theta, allocation, state, generator=generator)
             state = self.model.update(state, allocation, observation)
-            state = self.active_rule.apply(state)
-            active_path.append(active_indices_to_list(state.active))
+            decision = self.active_rule.evaluate(state, self.model, smoothing=self.smoothing)
+            state = state.replace(active=decision.active)
+            active_path.append([float(x) for x in state.active.detach().cpu().tolist()])
 
-        if not state.stopped:
-            stop_reason = "horizon"
-        else:
-            stop_reason = state.stop_reason or "stopped"
-
-        selected_arm = state.selected_arm(self.model.target_idx)
-        target_values = true_theta[:, self.model.target_idx]
+        selected_arm = self.model.selected_arm(state)
+        target_values = true_theta[:, self.model.target_metric_idx]
         true_best_arm = int(torch.argmax(target_values).item())
         simple_regret = float((torch.max(target_values) - target_values[selected_arm]).item())
         guardrail_violation = self.active_rule.selected_violates(true_theta, selected_arm)
@@ -115,9 +110,7 @@ class ExperimentRunner:
             seed=int(seed),
             selected_arm=selected_arm,
             true_best_arm=true_best_arm,
-            stop_time=int(state.t),
-            stopped=bool(state.stopped),
-            stop_reason=stop_reason,
+            completed_stages=int(state.t),
             simple_regret=simple_regret,
             guardrail_violation=guardrail_violation,
             unsafe_exposure=unsafe_exposure,

@@ -21,5 +21,14 @@ dev = [
   "pytest",
 ]
 
+[tool.poetry]
+name = "aexgym"
+version = "0.1.0"
+description = "Paper-focused adaptive experimentation package for Gaussian metric experiments"
+authors = ["AExGym authors"]
+readme = "README.md"
+package-mode = true
+packages = [{ include = "aexgym" }]
+
 [tool.setuptools.packages.find]
 include = ["aexgym*"]

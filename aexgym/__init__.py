@@ -1,4 +1,5 @@
 from aexgym.core import (
+    ActiveSetDecision,
     ActiveSetRule,
     ExperimentInstance,
     ExperimentRunner,
@@ -6,6 +7,7 @@ from aexgym.core import (
     GaussianMetricState,
     NoActiveSetRule,
     RunResult,
+    SmoothingConfig,
     aggregate_results,
     project_allocation,
 )
@@ -19,7 +21,7 @@ from aexgym.policies import (
     MetricPolicy,
     MyopicLookaheadPolicy,
     NoSequenceRegularizer,
-    PathwiseStoppedRhoSimulation,
+    PathwiseActiveSetRhoSimulation,
     ReducedTerminalRhoSimulation,
     RhoParameterization,
     RhoPlan,
@@ -33,6 +35,7 @@ from aexgym.policies import (
 
 __all__ = [
     "ActiveSetRule",
+    "ActiveSetDecision",
     "BasePlusResidualLogitParameterization",
     "ConstantAllocationParameterization",
     "ExperimentInstance",
@@ -47,7 +50,7 @@ __all__ = [
     "MyopicLookaheadPolicy",
     "NoActiveSetRule",
     "NoSequenceRegularizer",
-    "PathwiseStoppedRhoSimulation",
+    "PathwiseActiveSetRhoSimulation",
     "ReducedTerminalRhoSimulation",
     "RhoParameterization",
     "RhoPlan",
@@ -55,6 +58,7 @@ __all__ = [
     "RhoSimulation",
     "RunResult",
     "SequenceRegularizer",
+    "SmoothingConfig",
     "TemporalUniformityRegularizer",
     "UniformActivePolicy",
     "aggregate_results",

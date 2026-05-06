@@ -25,7 +25,8 @@ class MetricPolicy:
 
 class UniformActivePolicy(MetricPolicy):
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> Tensor:
-        return project_allocation(torch.ones(state.n_arms, dtype=state.mean.dtype, device=state.mean.device), state.active).to(state.mean.dtype)
+        raw = torch.ones(state.n_arms, dtype=state.dtype, device=state.device)
+        return project_allocation(raw, state.active).to(state.dtype)
 
 
 class GaussianThompsonPolicy(MetricPolicy):
@@ -34,17 +35,14 @@ class GaussianThompsonPolicy(MetricPolicy):
         self.n_samples = int(n_samples)
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> Tensor:
-        if state.active_count <= 1:
-            return project_allocation(torch.ones(state.n_arms, dtype=state.mean.dtype, device=state.mean.device), state.active).to(state.mean.dtype)
-        target_idx = model.target_idx
-        mean = state.mean[:, target_idx]
-        std = torch.sqrt(torch.clamp(state.cov[:, target_idx, target_idx], min=1e-16))
-        z = torch.randn(self.n_samples, state.n_arms, dtype=state.mean.dtype, device=state.mean.device, generator=self.generator)
+        mean = model.target_mean(state)
+        std = torch.sqrt(torch.clamp(model.target_variance(state), min=1e-16))
+        z = torch.randn(self.n_samples, state.n_arms, dtype=state.dtype, device=state.device, generator=self.generator)
         samples = mean.unsqueeze(0) + std.unsqueeze(0) * z
-        samples[:, ~state.active] = -torch.inf
+        samples[:, state.active <= 0] = -torch.inf
         winners = torch.argmax(samples, dim=1)
-        counts = torch.bincount(winners, minlength=state.n_arms).to(dtype=state.mean.dtype)
-        return project_allocation(counts, state.active).to(state.mean.dtype)
+        counts = torch.bincount(winners, minlength=state.n_arms).to(dtype=state.dtype, device=state.device)
+        return project_allocation(counts, state.active).to(state.dtype)
 
 
 class GaussianTopTwoThompsonPolicy(GaussianThompsonPolicy):
@@ -54,15 +52,12 @@ class GaussianTopTwoThompsonPolicy(GaussianThompsonPolicy):
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> Tensor:
         p_best = super().allocate(state, model)
-        if state.active_count <= 1:
-            return p_best
         p_best = torch.clamp(p_best, min=1e-8, max=1.0 - 1e-8)
-        active = state.active.to(dtype=p_best.dtype)
-        odds = torch.where(state.active, p_best / (1.0 - p_best), torch.zeros_like(p_best))
+        active = (state.active > 0).to(dtype=p_best.dtype)
+        odds = torch.where(state.active > 0, p_best / (1.0 - p_best), torch.zeros_like(p_best))
         sum_other_odds = torch.sum(odds) - odds
         probs = p_best * (self.coin + (1.0 - self.coin) * sum_other_odds)
-        probs = probs * active
-        return project_allocation(probs, state.active).to(state.mean.dtype)
+        return project_allocation(probs * active, state.active).to(state.dtype)
 
 
 def one_step_target_value(
@@ -74,19 +69,19 @@ def one_step_target_value(
 ) -> Tensor:
     """Monte Carlo value of a target-only Gaussian update."""
 
-    target_idx = model.target_idx
-    active = state.active
-    allocation = project_allocation(allocation.to(device=state.mean.device), active).to(dtype=state.mean.dtype)
+    allocation = project_allocation(allocation.to(device=state.device), state.active).to(dtype=state.dtype)
     if residual_batch is None:
         residual_batch = model.batch_size(state.t)
-    active_idx = state.active_indices()
-    target_mean = state.mean[active_idx, target_idx]
-    prior_var = torch.clamp(state.cov[active_idx, target_idx, target_idx], min=1e-16)
-    obs_var = torch.clamp(model.obs_cov[active_idx, target_idx, target_idx], min=1e-16)
-    active_allocation = allocation[active_idx]
+    active_arm_idx = torch.nonzero(state.active > 0, as_tuple=False).flatten()
+    if active_arm_idx.numel() == 0:
+        raise ValueError("active set cannot be empty")
+    target_mean = model.target_mean(state)[active_arm_idx]
+    prior_var = torch.clamp(model.target_variance(state)[active_arm_idx], min=1e-16)
+    obs_var = torch.clamp(model.obs_cov[active_arm_idx, model.target_metric_idx, model.target_metric_idx], min=1e-16)
+    active_allocation = allocation[active_arm_idx]
     post_var = 1.0 / (1.0 / prior_var + residual_batch * active_allocation / obs_var)
     phi = torch.sqrt(torch.clamp(prior_var - post_var, min=0.0))
-    values = target_mean.unsqueeze(0) + z[:, active_idx] * phi.unsqueeze(0)
+    values = target_mean.unsqueeze(0) + z[:, active_arm_idx] * phi.unsqueeze(0)
     return torch.max(values, dim=1).values.mean()
 
 
@@ -124,28 +119,27 @@ def _optimize_target_value(
     generator: Optional[torch.Generator],
     residual_batch: Tensor,
 ) -> Tensor:
-    active_idx = state.active_indices()
-    if active_idx.numel() <= 1:
-        return project_allocation(torch.ones(state.n_arms, dtype=state.mean.dtype, device=state.mean.device), state.active).to(state.mean.dtype)
-
-    z = torch.randn(num_zs, state.n_arms, dtype=state.mean.dtype, device=state.mean.device, generator=generator)
-    logits = torch.zeros(active_idx.numel(), dtype=state.mean.dtype, device=state.mean.device, requires_grad=True)
+    active_arm_idx = torch.nonzero(state.active > 0, as_tuple=False).flatten()
+    if active_arm_idx.numel() == 0:
+        raise ValueError("active set cannot be empty")
+    z = torch.randn(num_zs, state.n_arms, dtype=state.dtype, device=state.device, generator=generator)
+    logits = torch.zeros(active_arm_idx.numel(), dtype=state.dtype, device=state.device, requires_grad=True)
     optimizer = torch.optim.Adam([logits], lr=lr)
 
     for _ in range(epochs):
         optimizer.zero_grad()
-        probs = _active_logits_to_full_probs(logits, active_idx, state.n_arms)
+        probs = _active_logits_to_full_probs(logits, active_arm_idx, state.n_arms)
         loss = -one_step_target_value(state, model, probs, z, residual_batch=residual_batch)
         loss.backward()
         optimizer.step()
 
-    probs = _active_logits_to_full_probs(logits.detach(), active_idx, state.n_arms)
-    return project_allocation(probs, state.active).to(state.mean.dtype)
+    probs = _active_logits_to_full_probs(logits.detach(), active_arm_idx, state.n_arms)
+    return project_allocation(probs, state.active).to(state.dtype)
 
 
-def _active_logits_to_full_probs(logits: Tensor, active_idx: Tensor, n_arms: int) -> Tensor:
+def _active_logits_to_full_probs(logits: Tensor, active_arm_idx: Tensor, n_arms: int) -> Tensor:
     active_probs = F.softmax(logits, dim=0)
-    selector = F.one_hot(active_idx, num_classes=n_arms).to(dtype=active_probs.dtype, device=active_probs.device).T
+    selector = F.one_hot(active_arm_idx, num_classes=n_arms).to(dtype=active_probs.dtype, device=active_probs.device).T
     return selector @ active_probs
 
 
@@ -158,4 +152,4 @@ class FixedSequencePolicy(MetricPolicy):
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> Tensor:
         idx = min(state.t, self.sequence.shape[0] - 1)
-        return project_allocation(self.sequence[idx].to(dtype=state.mean.dtype, device=state.mean.device), state.active).to(state.mean.dtype)
+        return project_allocation(self.sequence[idx].to(dtype=state.dtype, device=state.device), state.active).to(state.dtype)

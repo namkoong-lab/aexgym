@@ -48,7 +48,7 @@ def test_paper_scenarios_use_j1_target_metric_for_gaussian_policy_path():
 
     assert isinstance(model, GaussianMetricModel)
     assert model.n_metrics == 1
-    assert model.target_idx == 0
+    assert model.target_metric_idx == 0
 
 
 def test_sobol_reduced_terminal_prepare_is_deterministic():
@@ -56,7 +56,7 @@ def test_sobol_reduced_terminal_prepare_is_deterministic():
         prior_mean=torch.zeros((3, 1), dtype=torch.float64),
         prior_cov=torch.eye(1, dtype=torch.float64).repeat(3, 1, 1),
         obs_cov=torch.eye(1, dtype=torch.float64).repeat(3, 1, 1),
-        target_idx=0,
+        target_metric_idx=0,
         batch_sizes=torch.ones(2, dtype=torch.float64),
     )
     state = model.initial_state()
@@ -81,7 +81,7 @@ def test_tiny_paper_scenario_run_records_target_metric_and_aggregates():
     aggregates = aggregate_records(records)
 
     assert {record.policy_name for record in records} == {"uniform", "ts", "reduced_constant"}
-    assert all(record.model_n_metrics == 1 and record.target_idx == 0 for record in records)
+    assert all(record.model_n_metrics == 1 and record.target_metric_idx == 0 for record in records)
     assert all("selected_true_best_rate" in row for row in aggregates.values())
 
 

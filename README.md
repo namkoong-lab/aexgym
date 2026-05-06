@@ -18,7 +18,17 @@ not part of the supported execution path on this branch.
 
 ## Installation
 
-Create the environment and install the package in editable mode:
+With Poetry:
+
+```bash
+poetry install
+```
+
+This installs `aexgym` as a package, so notebooks should import it directly
+without modifying `sys.path`.
+
+Alternatively, create the Conda environment and install the package in editable
+mode:
 
 ```bash
 conda env create -f environment.yml

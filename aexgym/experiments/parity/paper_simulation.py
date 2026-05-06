@@ -146,7 +146,7 @@ class PaperRunRecord:
     simple_regret: float
     allocation_path: list[list[float]]
     model_n_metrics: int
-    target_idx: int
+    target_metric_idx: int
     metadata: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -182,9 +182,9 @@ class PlanningHorizonPolicyAdapter(MetricPolicy):
             prior_mean=model.prior_mean,
             prior_cov=model.prior_cov,
             obs_cov=model.obs_cov,
-            target_idx=model.target_idx,
+            target_metric_idx=model.target_metric_idx,
             batch_sizes=batch_sizes,
-            control_arm=model.control_arm,
+            control_arm_idx=model.control_arm_idx,
             allocation_floor=model.allocation_floor,
         )
         return self.policy.allocate(state, planning_model)
@@ -215,7 +215,7 @@ class OracleBetaThompsonPolicy(MetricPolicy):
             probs = np.clip(probs, 1e-8, 1.0 - 1e-8)
             odds = probs / (1.0 - probs)
             probs = probs * (0.5 + 0.5 * (odds.sum() - odds))
-        return project_allocation(torch.as_tensor(probs, dtype=state.mean.dtype), state.active).to(state.mean.dtype)
+        return project_allocation(torch.as_tensor(probs, dtype=state.dtype, device=state.device), state.active).to(state.dtype)
 
     def observe(self, rewards: np.ndarray, draws: np.ndarray, **kwargs) -> None:
         self.alpha = self.alpha + rewards
@@ -243,8 +243,8 @@ class SuccessiveEliminationPolicy(MetricPolicy):
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> torch.Tensor:
         del model
-        active = torch.as_tensor(self.active, dtype=torch.bool, device=state.mean.device) & state.active
-        return project_allocation(torch.ones(state.n_arms, dtype=state.mean.dtype, device=state.mean.device), active).to(state.mean.dtype)
+        active = torch.as_tensor(self.active, dtype=state.dtype, device=state.device) * (state.active > 0).to(state.dtype)
+        return project_allocation(torch.ones(state.n_arms, dtype=state.dtype, device=state.device), active).to(state.dtype)
 
     def observe(self, rewards: np.ndarray, draws: np.ndarray, **kwargs) -> None:
         self.total_rewards += rewards
@@ -277,14 +277,14 @@ class TsPlusPolicy(MetricPolicy):
         self.temperature = float(temperature)
 
     def allocate(self, state: GaussianMetricState, model: GaussianMetricModel) -> torch.Tensor:
-        active_idx = state.active_indices()
-        if active_idx.numel() <= 1:
-            return project_allocation(torch.ones(state.n_arms, dtype=state.mean.dtype, device=state.mean.device), state.active).to(state.mean.dtype)
-        logits = torch.zeros(active_idx.numel(), dtype=state.mean.dtype, device=state.mean.device, requires_grad=True)
+        active_arm_idx = torch.nonzero(state.active > 0, as_tuple=False).flatten()
+        if active_arm_idx.numel() == 0:
+            raise ValueError("active set cannot be empty")
+        logits = torch.zeros(active_arm_idx.numel(), dtype=state.dtype, device=state.device, requires_grad=True)
         optimizer = torch.optim.Adam([logits], lr=self.lr)
         horizon = model.horizon - state.t
-        z = torch.randn(horizon, self.n_rollouts, state.n_arms, dtype=state.mean.dtype, device=state.mean.device, generator=self.generator)
-        selector = torch.nn.functional.one_hot(active_idx, num_classes=state.n_arms).to(dtype=state.mean.dtype, device=state.mean.device)
+        z = torch.randn(horizon, self.n_rollouts, state.n_arms, dtype=state.dtype, device=state.device, generator=self.generator)
+        selector = torch.nn.functional.one_hot(active_arm_idx, num_classes=state.n_arms).to(dtype=state.dtype, device=state.device)
         for _ in range(self.epochs):
             optimizer.zero_grad()
             action = torch.softmax(logits, dim=0) @ selector
@@ -292,13 +292,13 @@ class TsPlusPolicy(MetricPolicy):
             (-value).backward()
             optimizer.step()
         action = torch.softmax(logits.detach(), dim=0) @ selector
-        return project_allocation(action, state.active).to(state.mean.dtype)
+        return project_allocation(action, state.active).to(state.dtype)
 
 
 def _rollout_ts_plus_value(state: GaussianMetricState, model: GaussianMetricModel, first_action: torch.Tensor, z: torch.Tensor, temperature: float) -> torch.Tensor:
-    means = state.mean[:, model.target_idx].unsqueeze(0).repeat(z.shape[1], 1)
-    vars_ = state.cov[:, model.target_idx, model.target_idx].unsqueeze(0).repeat(z.shape[1], 1)
-    obs_var = model.obs_cov[:, model.target_idx, model.target_idx].unsqueeze(0)
+    means = model.target_mean(state).unsqueeze(0).repeat(z.shape[1], 1)
+    vars_ = model.target_variance(state).unsqueeze(0).repeat(z.shape[1], 1)
+    obs_var = model.obs_cov[:, model.target_metric_idx, model.target_metric_idx].unsqueeze(0)
     for h in range(z.shape[0]):
         if h == 0:
             allocation = first_action.unsqueeze(0).repeat(z.shape[1], 1)
@@ -441,7 +441,7 @@ def make_model(instance: PaperBanditInstance) -> GaussianMetricModel:
     prior_cov = torch.as_tensor(instance.prior_var, dtype=torch.float64).reshape(instance.n_arms, 1, 1)
     obs_cov = torch.as_tensor(instance.believed_obs_var, dtype=torch.float64).reshape(instance.n_arms, 1, 1)
     batch_sizes = torch.as_tensor(instance.batch_sizes, dtype=torch.float64)
-    return GaussianMetricModel(prior_mean=prior_mean, prior_cov=prior_cov, obs_cov=obs_cov, target_idx=0, batch_sizes=batch_sizes)
+    return GaussianMetricModel(prior_mean=prior_mean, prior_cov=prior_cov, obs_cov=obs_cov, target_metric_idx=0, batch_sizes=batch_sizes)
 
 
 def sample_observation(
@@ -515,7 +515,7 @@ def run_one_policy(scenario: PaperScenario, instance: PaperBanditInstance, polic
     rng = np.random.default_rng(int(seed))
     state = model.initial_state()
     allocation_path: list[list[float]] = []
-    while state.t < scenario.horizon and state.t < model.horizon and not state.stopped:
+    while state.t < scenario.horizon and state.t < model.horizon:
         allocation_tensor = policy.allocate(state, model)
         allocation_tensor = model.validate_allocation(state, allocation_tensor)
         allocation = allocation_tensor.detach().cpu().numpy()
@@ -531,7 +531,7 @@ def run_one_policy(scenario: PaperScenario, instance: PaperBanditInstance, polic
     if hasattr(policy, "selected_arm"):
         selected_arm = int(policy.selected_arm())
     else:
-        selected_arm = state.selected_arm(model.target_idx)
+        selected_arm = model.selected_arm(state)
     true_best_arm = int(np.argmax(instance.true_objective))
     simple_regret = float(np.max(instance.true_objective) - instance.true_objective[selected_arm])
     metadata = {
@@ -556,7 +556,7 @@ def run_one_policy(scenario: PaperScenario, instance: PaperBanditInstance, polic
         simple_regret=simple_regret,
         allocation_path=allocation_path,
         model_n_metrics=model.n_metrics,
-        target_idx=model.target_idx,
+        target_metric_idx=model.target_metric_idx,
         metadata=metadata,
     )
 
@@ -569,7 +569,7 @@ def _replace_model_obs_var(model: GaussianMetricModel, estimated_var: np.ndarray
     clean = np.where(np.isnan(clean), fill, clean)
     obs_cov = torch.as_tensor(clean, dtype=model.prior_mean.dtype, device=model.prior_mean.device).reshape(model.n_arms, 1, 1)
     model.obs_cov = obs_cov
-    model._obs_precision = torch.linalg.inv(obs_cov)
+    model.obs_precision = torch.cholesky_inverse(torch.linalg.cholesky(obs_cov))
 
 
 def build_policy(policy_name: str, scenario: PaperScenario, instance: PaperBanditInstance, profile: PaperProfile) -> PaperPolicy:
@@ -599,7 +599,7 @@ def build_policy(policy_name: str, scenario: PaperScenario, instance: PaperBandi
     }:
         policy = build_rho_policy(
             policy_name,
-            target_idx=0,
+            target_metric_idx=0,
             epochs=profile.rho_epochs,
             num_samples=profile.rho_num_samples,
             lr=profile.rho_lr,
@@ -737,7 +737,7 @@ def aggregate_records(records: list[PaperRunRecord]) -> dict[str, dict]:
             "se_simple_regret": float(np.std(regrets, ddof=0) / math.sqrt(max(len(regrets), 1))),
             "selected_true_best_rate": float(np.mean(selected_true_best)),
             "model_n_metrics": group[0].model_n_metrics,
-            "target_idx": group[0].target_idx,
+            "target_metric_idx": group[0].target_metric_idx,
             "metadata": group[0].metadata,
         }
         aggregates[f"{scenario_id}::{policy_name}"] = entry
@@ -757,7 +757,7 @@ def run_exact_gaussian_with_core_runner(scenario: PaperScenario, policy_names: I
 
     instance = make_instance(scenario, seed)
     model = make_model(instance)
-    runner = ExperimentRunner(model, NoActiveSetRule(target_idx=0))
+    runner = ExperimentRunner(model, NoActiveSetRule(target_metric_idx=0))
     results = []
     for policy_name in policy_names:
         policy = build_policy(policy_name, scenario, instance, profile)
@@ -775,7 +775,7 @@ def run_exact_gaussian_with_core_runner(scenario: PaperScenario, policy_names: I
                 simple_regret=core_result.simple_regret,
                 allocation_path=core_result.allocation_path,
                 model_n_metrics=model.n_metrics,
-                target_idx=model.target_idx,
+                target_metric_idx=model.target_metric_idx,
                 metadata=scenario.metadata,
             )
         )

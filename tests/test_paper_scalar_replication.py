@@ -31,8 +31,8 @@ def test_paper_scalar_update_matches_legacy_aggregate_recursion():
 
     expected_sigma2 = (s2 * sigma2) / (s2 + allocation * sigma2)
     expected_mu = expected_sigma2 * ((mu / sigma2) + allocation * (aggregate_g / s2))
-    assert np.allclose(state.mean[:, 0].numpy(), expected_mu)
-    assert np.allclose(state.cov[:, 0, 0].numpy(), expected_sigma2)
+    assert np.allclose(model.target_mean(state).numpy(), expected_mu)
+    assert np.allclose(model.target_variance(state).numpy(), expected_sigma2)
 
 
 @pytest.mark.skipif(not (ADAPTIVE_ROOT / "MAB" / "simulator.py").exists(), reason="legacy simulator is not available")

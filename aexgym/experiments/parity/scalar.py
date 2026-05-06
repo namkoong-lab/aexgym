@@ -101,7 +101,7 @@ def make_model(config: ScalarParityConfig) -> GaussianMetricModel:
         prior_mean=prior_mean,
         prior_cov=prior_cov,
         obs_cov=obs_cov,
-        target_idx=0,
+        target_metric_idx=0,
         batch_sizes=batch_sizes,
     )
 
@@ -142,7 +142,7 @@ def make_policies(config: ScalarParityConfig) -> dict[str, object]:
     for variant in config.rho_variants:
         policies[variant] = build_rho_policy(
             variant,
-            target_idx=0,
+            target_metric_idx=0,
             epochs=config.rho_epochs,
             num_samples=config.rho_num_samples,
             lr=config.rho_lr,
@@ -155,7 +155,7 @@ def run_config(config: ScalarParityConfig) -> dict:
     if config.scenario not in PARITY_SCENARIOS:
         raise ValueError(f"unknown scenario {config.scenario}; choose one of {sorted(PARITY_SCENARIOS)}")
     model = make_model(config)
-    runner = ExperimentRunner(model, active_rule=NoActiveSetRule(target_idx=0))
+    runner = ExperimentRunner(model, active_rule=NoActiveSetRule(target_metric_idx=0))
     policies = make_policies(config)
     if not policies:
         raise ValueError("at least one baseline policy or rho variant must be configured")

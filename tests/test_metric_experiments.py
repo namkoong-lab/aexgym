@@ -23,12 +23,11 @@ def test_tiny_scalar_parity_run_logs_expected_fields():
     for key in [
         "selected_arm",
         "true_best_arm",
-        "stop_time",
+        "completed_stages",
         "simple_regret",
         "active_path",
         "allocation_path",
         "unsafe_exposure",
-        "stop_reason",
     ]:
         assert key in first
 
@@ -47,7 +46,8 @@ def test_guardrail_run_removes_unsafe_treatment_and_records_exposure():
     run = payload["runs"]["uniform"][0]
 
     assert run["unsafe_exposure"] > 0
-    assert any(2 not in active for active in run["active_path"][1:])
+    assert any(active[2] == 0.0 for active in run["active_path"][1:])
+    assert run["completed_stages"] == config.horizon
 
 
 def test_reproducibility_with_fixed_seed():
